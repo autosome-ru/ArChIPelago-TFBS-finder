@@ -30,7 +30,7 @@ Then ```cd``` in TFBS-finder.
 Now you are ready to start.
 Run the script with your .mfa file for selected TF. 
 </br></br>
-``` python scanning_tool.py -mfa [your_mfa_file] -f_name [factor_of_interest] -threshold [0-1] -step [1-200]```
+``` python scanning_tool.py -mfa [your_mfa_file] -f_name [factor_of_interest] -threshold [0-1]```
 </br></br>
 
 ## Contact me
