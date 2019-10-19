@@ -25,6 +25,7 @@ Then ```cd``` in TFBS-finder</br></br>
 
 Now you are ready to start.
 Run the script with your .mfa file for selected TF. 
+<br>
 ``` python scanning_tool.py -mfa [your_mfa_file] -f_name [factor_of_interest] -threshold 0.5 -step 50```
 
 
