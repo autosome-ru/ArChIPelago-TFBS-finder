@@ -21,13 +21,13 @@ import matplotlib.pyplot as plt
 #### грузим параметры
 print("Loading parameters ...")
 parser = argparse.ArgumentParser(description='Scanner')
-parser.add_argument('-root', action='store', help='Root directory', required=True)
+parser.add_argument('-root', action='store', help='Root directory', required=False, default=".")
 parser.add_argument('-mfa', action='store', help='Multi fasta file', required=True)
 parser.add_argument('-f_name', action='store', help='Factor name', required=True)
-parser.add_argument('-sarus_h', action='store', help='Sarus PWM scanner home', required=True)
+parser.add_argument('-sarus_h', action='store', help='Sarus PWM scanner home', required=False, default="./sarus/releases/sarus-2.0.1.jar")
 parser.add_argument('-threshold', action='store', help='Result threshold [0-1]', required=True)
-parser.add_argument('-step', action='store', help='Step value [1-100]', required=True)
-parser.add_argument('-frame', action='store', help='Frame size [200]', required=True)
+parser.add_argument('-step', action='store', help='Step value [1-100]', required=False, default=100)
+parser.add_argument('-frame', action='store', help='Frame size [200]', required=False, default=200)
 args = parser.parse_args()
 
 
@@ -35,9 +35,9 @@ root = args.root #"/home/pavel-kravchenko/basicdir/program_files"
 os.chdir(root)
 mfa_filename = args.mfa #"sequence_Y.fasta" 
 TF_name = args.f_name #"CEBPB" 
-threshold = args.threshold
-frame = args.frame
-step = args.step
+threshold = float(args.threshold)
+frame = int(args.frame)
+step = int(args.step)
 pwmdir = root + "/pwmdir_tmp"
 featuredir = root + "/featuredir_tmp"
 sarus_home = args.sarus_h #"/home/pavel-kravchenko/sarus/releases/sarus-2.0.1.jar"
@@ -150,4 +150,3 @@ pd.DataFrame.to_csv(out_df, "out_df.csv",  sep='\t', header=True)
 
 
 print("Done!")
-
