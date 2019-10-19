@@ -25,7 +25,7 @@ Then ```cd``` in TFBS-finder</br></br>
 
 Now you are ready to start.
 Run the script with your .mfa file for selected TF. 
-``` python scanning_tool.py -root `pwd` -mfa [your_mfa_file] -f_name [factor_of_interest] -sarus_h ./sarus/releases/sarus-2.0.1.jar -threshold 0.5 -step 50 -frame 200 ```
+``` python scanning_tool.py -mfa [your_mfa_file] -f_name [factor_of_interest] -threshold 0.5 -step 50```
 
 
 ## Contact me
