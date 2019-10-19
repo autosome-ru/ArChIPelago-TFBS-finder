@@ -2,7 +2,7 @@
 
 This is a repo of transcription factors binding sites prediction project
 
-This script provides a TFBS search based on a PWMs' unified classifier prediction. 
+This script provides a TFBS search with the help of unified classifier built on mononucleotide PWMs. 
 
 ## Before you start
 
@@ -18,16 +18,20 @@ Make sure that you have installed all components:
 
 ### Installation
 
-First of all you have to ```clone``` this directory</br></br>
-```git clone https://github.com/Pavel-Kravchenko/TFBS-finder/```</br></br>
-Then ```cd``` in TFBS-finder</br></br>
-```cd TFBS-finder```</br></br>
+First of all you have to ```clone``` this directory
+</br></br>
+```git clone https://github.com/Pavel-Kravchenko/TFBS-finder/```
+</br></br>
+Then ```cd``` in TFBS-finder
+</br></br>
+```cd TFBS-finder```
+</br></br>
 
 Now you are ready to start.
 Run the script with your .mfa file for selected TF. 
-<br>
-``` python scanning_tool.py -mfa [your_mfa_file] -f_name [factor_of_interest] -threshold 0.5 -step 50```
-
+</br></br>
+``` python scanning_tool.py -mfa [your_mfa_file] </br> -f_name [factor_of_interest] </br> -threshold [0-1] </br> -step [1-200]```
+</br></br>
 
 ## Contact me
 
