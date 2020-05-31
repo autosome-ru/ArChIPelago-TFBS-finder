@@ -45,10 +45,10 @@ threshold = float(args.threshold)
 frame = int(args.frame)
 step = int(args.step)
 pwm = args.pwm
-basicdir = root + "/Factors/" + TF_name
-pwmdir = root + "/Factors/" + TF_name + "/pwmdir_tmp"
-dpwmdir = root + "/Factors/" + TF_name + "/dpwmdir_tmp"
-featuredir = root + "/Factors/" + TF_name + "/featuredir_tmp"
+basicdir = root + "/Factors_100k/" + TF_name
+pwmdir = root + "/Factors_100k/" + TF_name + "/pwmdir_tmp"
+dpwmdir = root + "/Factors_100k/" + TF_name + "/dpwmdir_tmp"
+featuredir = root + "/Factors_100k/" + TF_name + "/featuredir_tmp"
 sarus_home = args.sarus_h #"/home/pavel-kravchenko/sarus/releases/sarus-2.0.1.jar"
 results = root + "/Results"
 
