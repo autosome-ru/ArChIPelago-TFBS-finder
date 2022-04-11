@@ -32,6 +32,9 @@ Run the script with your .mfa file for selected TF.
 </br></br>
 ``` python scanning_tool.py -mfa [your_mfa_file] -f_name [factor_of_interest] -threshold [0-1]```
 </br></br>
+Example1: python scanning_tool.py -mfa random_10000.fasta -tf_name all -threshold 0.5 -pwm m -model RandomForestClassifier
+Example3: python scanning_tool.py -mfa random_10000.fasta -tf_name CTCF -threshold 0.5 -pwm d -model LogisticRegression
+Example2: python scanning_tool.py -mfa random_10000.fasta -tf_name ANDR -threshold 0.5 -pwm md -model BaggingClassifier_LogisticRegression
 
 ## Contact me
 
