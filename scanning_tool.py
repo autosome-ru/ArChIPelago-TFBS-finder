@@ -56,6 +56,7 @@ model = args.model
 
               
 TF_list = [
+ 'ANDR_HUMAN',
  'AP2A_HUMAN',
  'CEBPB_HUMAN',
  'COE1_HUMAN',
@@ -88,7 +89,7 @@ TF_list = [
  'STAT1_HUMAN',
  'STAT3_HUMAN',
  'TAL1_HUMAN',
- 'TF65_HUMAN','ANDR_HUMAN',
+ 'TF65_HUMAN',
  'TFE2_HUMAN',
  'USF2_HUMAN']
 TF_list = [x.split("_")[0] for x in TF_list]
@@ -477,8 +478,8 @@ for TF_name in TF_list:
             #print(matrix)
             line = 'java -Xmx2G -cp {sarus_home} ru.autosome.SARUS {mfa_file} {matrix} --skipn --show-non-matching --output-scoring-mode score besthit | grep -v \> > {out_file}'.format(sarus_home = sarus_home,
             mfa_file = "tmp.fasta",
-            matrix = ''.join([pwmdir, matrix]),
-            out_file = ''.join([featuredir, matrix.split(".")[0] + "_mono.tab"]))
+            matrix = '/'.join([pwmdir, matrix]),
+            out_file = '/'.join([featuredir, matrix.split(".")[0] + "_mono.tab"]))
             #print(line)
             p = subprocess.Popen(line, shell=True)
             p.wait()
