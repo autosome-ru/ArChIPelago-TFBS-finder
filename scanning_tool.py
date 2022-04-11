@@ -100,6 +100,7 @@ if args.tf_av == "y":
     for i in TF_list:
         print(i)
     print(" ")
+    sys.exit(0)
 
 
 if args.model_av == "y":
@@ -107,6 +108,7 @@ if args.model_av == "y":
     for i in ['XGBClassifier', 'RandomForestClassifier', 'LogisticRegression', 'BaggingClassifier_LogisticRegression']:
         print(i)
     print(" ")
+    sys.exit(0)
 
     
     
