@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt
 
 # In[3]:
 
-#### грузим параметры
+#### 
 print("Loading parameters ...")
 parser = argparse.ArgumentParser(description='Scanner')
 parser.add_argument('-root', action='store', help='Root directory', required=False, default=".")
@@ -169,7 +169,7 @@ for TF_name in TF_list:
 
 
     # In[5]:
-    ### извлечь матрицы для фактора в tmp директорию
+    ### 
 
     print("Sarus is scanning ...")
     if pwm == "m":
