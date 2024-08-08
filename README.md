@@ -1,4 +1,4 @@
-# TFBS-finder: A scanning tool based on — ArChIPelago — Aggregation of multiple position weight matrices and ChIP-seq with machinE LeArninG for predictiOn of transcription factors binding sites
+# ArChIPelago-TFBS-finder: A scanning tool based on — ArChIPelago — Aggregation of multiple position weight matrices and ChIP-seq with machinE LeArninG for predictiOn of transcription factors binding sites
 
 
 This is a repo of transcription factors binding sites prediction project.
