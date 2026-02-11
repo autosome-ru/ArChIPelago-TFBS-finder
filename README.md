@@ -2,13 +2,7 @@
 
 **Command-line tool for scanning DNA sequences for transcription factor binding sites (TFBS) using pre-trained ArChIPelago Random Forest models.**
 
-ArChIPelago-TFBS-finder addresses the false-positive problem inherent in
-repurposing a classifier as a scanner by constructing an **empirical null
-distribution** from dinucleotide-shuffled sequences and applying
-**Benjamini–Hochberg FDR control**.
-
-> **Paper:** *ArChIPelago — an Automated Pipeline for Comprehensive ChIP-seq
-> Data Analysis* (Kravchenko et al.)
+> **Paper:** *Classic machine learning on top of multiple position weight matrices improves genomic prediction of transcription factor binding sites* (Kravchenko et al. 2026)
 
 ---
 
