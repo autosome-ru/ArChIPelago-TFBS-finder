@@ -1,0 +1,22 @@
+# ArChIPelago-TFBS-finder requirements
+# Install with: pip install -r requirements.txt
+
+# Core dependencies
+numpy>=1.19.0
+pandas>=1.2.0
+scikit-learn>=1.3.0
+joblib>=1.0.0
+
+# Sequence handling
+biopython>=1.79
+
+# Visualization (optional – only needed for notebooks)
+matplotlib>=3.4.0
+seaborn>=0.11.0
+
+# Testing
+pytest>=7.0.0
+
+# Optional: Jupyter support
+jupyter>=1.0.0
+ipykernel>=6.0.0

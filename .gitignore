@@ -1,0 +1,38 @@
+# ── Data directories (download from Zenodo) ──────────────────────────
+Models_sklearn13/
+PWMs_mono_HUMAN/
+PWMs_di_HUMAN/
+
+# ── Legacy code & notebooks ──────────────────────────────────────────
+ArChIPelago-TFBS-finder legacy code/
+scanning_tool_bp*.ipynb
+scanning_tool_bp*.ipynb
+improved_tfbs_scanner.ipynb
+
+# ── SARUS binary (user downloads separately) ─────────────────────────
+sarus/
+
+# ── Generated output ─────────────────────────────────────────────────
+CTCF_data/
+
+# ── Validation metric tables ─────────────────────────────────────────
+Validation_*.txt
+GC_After_BiasAway.csv
+
+# ── Python / IDE artefacts ───────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+*.sav
+.pytest_cache/
+.ipynb_checkpoints/
+
+# ── macOS / editor ───────────────────────────────────────────────────
+.DS_Store
+*.swp
+*.swo
+*~
+.vscode/
