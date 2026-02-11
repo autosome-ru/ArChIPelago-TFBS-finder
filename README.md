@@ -27,7 +27,7 @@
 
 | Feature | Description |
 |---|---|
-| **36 pre-trained RF models** | One model per TF, trained on ChIP-seq data from HOCOMOCO |
+| **Pre-trained RF models** | Several models for each TF, trained on ChIP-seq data from HOCOMOCO |
 | **Mono- & di-nucleotide PWMs** | Scans with SARUS using both PWM types |
 | **Sliding-window scanning** | Configurable frame size (default 301 bp) and step (default 150 bp) |
 | **Empirical null calibration** | Dinucleotide-shuffled null distribution to estimate p-values |
