@@ -321,18 +321,17 @@ pytest -v
 
 ## Citation
 
-If you use ArChIPelago-TFBS-finder in your research, please cite:
+If you use ArChIPelago or ArChIPelago-TFBS-finder in your research, please cite:
 
 ```bibtex
-@article{kravchenko2025archipelago,
-  title   = {ArChIPelago — an Automated Pipeline for Comprehensive ChIP-seq Data Analysis},
+@article{kravchenko2026archipelago,
+  title   = {Classic machine learning on top of multiple position weight matrices improves genomic prediction of transcription factor binding sites},
   author  = {Kravchenko, Pavel and others},
-  year    = {2025},
+  year    = {2026},
 }
 ```
 
 **Data:**
-> Kravchenko, P. (2025). ArChIPelago pre-trained models and PWMs [Data set].
 > Zenodo. https://doi.org/10.5281/zenodo.14927304
 
 ---
