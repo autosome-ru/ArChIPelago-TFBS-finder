@@ -7,7 +7,7 @@ Tests for:
 - Constants and configuration
 - Data classes (ScanConfig, ScanResult)
 - Sequence processing (parse_fasta, has_ambiguous, generate_windows, etc.)
-- PWM file handling (get_pwm_files, find_model_file, etc.)
+- model and PWM file handling (find_model_file, load_model, model_pwm_files, etc.)
 - Feature matrix construction
 - Empirical null calibration (dinucleotide_shuffle, compute_empirical_pvalues, BH)
 - Export functions
@@ -44,15 +44,15 @@ from scanning_tool import (
     generate_windows,
     windows_to_fasta,
     reverse_complement,
-    # PWM handling
-    _extract_pwm_number,
-    get_pwm_files,
+    # Model and PWM files
     find_model_file,
+    load_model,
     get_available_models,
+    model_pwm_files,
     validate_paths,
     # Feature matrix
     build_feature_matrix,
-    map_model_features,
+    standardise,
     compute_pwm_summary,
     # Null calibration
     dinucleotide_shuffle,
@@ -119,17 +119,23 @@ def sample_dpwm_dir(tmp_path):
 
 @pytest.fixture
 def mock_model_dir(tmp_path):
-    """Create a mock model directory with dummy .sav files."""
+    """Model directory with a small fitted model and its specification per PWM type."""
+    import json
+    import joblib as jl
+    from sklearn.ensemble import RandomForestClassifier
     ctcf_dir = tmp_path / "Models" / "CTCF"
     ctcf_dir.mkdir(parents=True)
-    files = [
-        "model_CTCF_HUMAN_RandomForestClassifier_mono_RF_on_all_PWMs.sav",
-        "model_CTCF_HUMAN_RandomForestClassifier_di_RF_on_all_PWMs.sav",
-        "finalized_model_CTCF_HUMAN_RandomForestClassifier_"
-        "mono_di_full_MODEL_all_features.sav",
-    ]
-    for fn in files:
-        (ctcf_dir / fn).touch()
+    feats = {"mono": ["mono_2", "mono_0", "mono_1"], "di": ["di_0", "di_1"],
+             "mono_di": ["mono_2", "mono_0", "mono_1", "di_0", "di_1"]}
+    rng = np.random.default_rng(0)
+    for pwm_type, f in feats.items():
+        X = rng.normal(size=(40, len(f)))
+        y = np.arange(40) % 2
+        model = RandomForestClassifier(n_estimators=3, random_state=0).fit(X, y)
+        jl.dump(model, ctcf_dir / f"ArChIPelago_CTCF_{pwm_type}.sav")
+        spec = {"tf": "CTCF", "pwm_type": pwm_type, "features": f,
+                "scaler_mean": [1.0] * len(f), "scaler_scale": [2.0] * len(f)}
+        (ctcf_dir / f"ArChIPelago_CTCF_{pwm_type}.json").write_text(json.dumps(spec))
     return tmp_path / "Models"
 
 
@@ -335,43 +341,11 @@ class TestReverseComplement:
 # Test PWM Handling
 # =============================================================================
 
-class TestExtractPwmNumber:
-    def test_numeric(self):
-        assert _extract_pwm_number(Path("5.pwm")) == 5
-        assert _extract_pwm_number(Path("10.pwm")) == 10
-        assert _extract_pwm_number(Path("0.pwm")) == 0
-
-    def test_non_numeric(self):
-        assert _extract_pwm_number(Path("abc.pwm")) == 999999
-
-
-class TestGetPwmFiles:
-    def test_gets_sorted_files(self, sample_pwm_dir):
-        files = get_pwm_files(sample_pwm_dir, "CTCF", ".pwm")
-        assert len(files) == 5
-        stems = [f.stem for f in files]
-        assert stems == ['0', '1', '2', '3', '4']
-
-    def test_missing_tf(self, sample_pwm_dir):
-        files = get_pwm_files(sample_pwm_dir, "NONEXISTENT", ".pwm")
-        assert files == []
-
-
 class TestFindModelFile:
-    def test_find_mono(self, mock_model_dir):
-        p = find_model_file(mock_model_dir, "CTCF", "mono")
-        assert p is not None
-        assert "mono_RF_on_all_PWMs" in p.name
-
-    def test_find_di(self, mock_model_dir):
-        p = find_model_file(mock_model_dir, "CTCF", "di")
-        assert p is not None
-        assert "di_RF_on_all_PWMs" in p.name
-
-    def test_find_mono_di(self, mock_model_dir):
-        p = find_model_file(mock_model_dir, "CTCF", "mono_di")
-        assert p is not None
-        assert "mono_di_full_MODEL_all_features" in p.name
+    @pytest.mark.parametrize("pwm_type", ["mono", "di", "mono_di"])
+    def test_find(self, mock_model_dir, pwm_type):
+        p = find_model_file(mock_model_dir, "CTCF", pwm_type)
+        assert p.name == f"ArChIPelago_CTCF_{pwm_type}.sav"
 
     def test_invalid_tf(self, mock_model_dir):
         assert find_model_file(mock_model_dir, "INVALID", "mono") is None
@@ -379,25 +353,47 @@ class TestFindModelFile:
     def test_invalid_pwm_type(self, mock_model_dir):
         assert find_model_file(mock_model_dir, "CTCF", "bad") is None
 
-    def test_prefers_base_model(self, tmp_path):
-        d = tmp_path / "M" / "CTCF"
-        d.mkdir(parents=True)
-        (d / "model_CTCF_HUMAN_RandomForestClassifier_"
-             "mono_RF_on_all_PWMs_SLIM_m1.sav").touch()
-        (d / "model_CTCF_HUMAN_RandomForestClassifier_"
-             "mono_RF_on_all_PWMs.sav").touch()
-        p = find_model_file(tmp_path / "M", "CTCF", "mono")
-        assert "SLIM" not in p.name
+
+class TestLoadModel:
+    def test_model_and_spec(self, mock_model_dir):
+        model, spec = load_model(mock_model_dir, "CTCF", "mono_di")
+        assert model.n_features_in_ == len(spec["features"]) == 5
+        assert spec["features"][0] == "mono_2"
+
+    def test_missing_model_raises(self, mock_model_dir):
+        with pytest.raises(FileNotFoundError):
+            load_model(mock_model_dir, "INVALID", "mono")
+
+    def test_spec_model_mismatch_raises(self, mock_model_dir):
+        import json
+        js = mock_model_dir / "CTCF" / "ArChIPelago_CTCF_mono.json"
+        spec = json.loads(js.read_text())
+        spec["features"] = spec["features"][:2]
+        js.write_text(json.dumps(spec))
+        with pytest.raises(ValueError):
+            load_model(mock_model_dir, "CTCF", "mono")
 
 
 class TestGetAvailableModels:
     def test_returns_models(self, mock_model_dir):
         models = get_available_models(mock_model_dir, "CTCF")
-        assert len(models) == 3
+        assert sorted(models) == ["di", "mono", "mono_di"]
 
     def test_missing_tf(self, mock_model_dir):
         models = get_available_models(mock_model_dir, "NONEXISTENT")
         assert models == {}
+
+
+class TestModelPwmFiles:
+    def test_model_order(self, sample_pwm_dir, sample_dpwm_dir):
+        spec = {"features": ["mono_3", "mono_0", "di_1"]}
+        files = model_pwm_files(spec, sample_pwm_dir, sample_dpwm_dir, "CTCF")
+        assert [f for f, _ in files] == ["mono_3", "mono_0", "di_1"]
+        assert [p.name for _, p in files] == ["3.pwm", "0.pwm", "1.dpwm"]
+
+    def test_missing_pwm_raises(self, sample_pwm_dir, sample_dpwm_dir):
+        with pytest.raises(FileNotFoundError):
+            model_pwm_files({"features": ["mono_9"]}, sample_pwm_dir, sample_dpwm_dir, "CTCF")
 
 
 class TestValidatePaths:
@@ -426,71 +422,29 @@ class TestValidatePaths:
 # =============================================================================
 
 class TestBuildFeatureMatrix:
-    def test_builds_correct_shape(self, tmp_path):
+    def test_model_order(self, tmp_path):
         windows = [("s1@0", "ACGT", 0), ("s1@1", "TGCA", 100)]
-        mono_dir = tmp_path / "scores"
-        mono_dir.mkdir()
-        score_f = mono_dir / "0_mono.tab"
-        score_f.write_text("1.5\n2.3\n")
-
-        mono_pwms = [Path("0.pwm")]
-        mono_scores = {"0": score_f}
-        df, mcols, dcols = build_feature_matrix(
-            windows, mono_scores, {}, mono_pwms, [])
-        assert len(df) == 2
-        assert "mono_0" in mcols
-        assert len(dcols) == 0
+        f0 = tmp_path / "mono_0.tab"
+        f0.write_text("1.5\n2.3\n")
+        f1 = tmp_path / "di_0.tab"
+        f1.write_text("0.1\n0.2\n")
+        df = build_feature_matrix(windows, {"mono_0": f0, "di_0": f1}, ["di_0", "mono_0"])
+        assert list(df.columns[3:]) == ["di_0", "mono_0"]
         assert df["mono_0"].tolist() == [1.5, 2.3]
 
-    def test_length_mismatch_skipped(self, tmp_path):
+    def test_length_mismatch_raises(self, tmp_path):
         windows = [("s1@0", "ACGT", 0)]
-        score_f = tmp_path / "0_mono.tab"
-        score_f.write_text("1.5\n2.3\n")  # 2 scores but 1 window
-        mono_pwms = [Path("0.pwm")]
-        df, mcols, dcols = build_feature_matrix(
-            windows, {"0": score_f}, {}, mono_pwms, [])
-        assert "mono_0" not in mcols
+        f0 = tmp_path / "mono_0.tab"
+        f0.write_text("1.5\n2.3\n")  # 2 scores but 1 window
+        with pytest.raises(RuntimeError):
+            build_feature_matrix(windows, {"mono_0": f0}, ["mono_0"])
 
 
-class TestMapModelFeatures:
-    def test_no_feature_names(self):
-        model = MagicMock(spec=[])
-        model.n_features_in_ = 3
-        del model.feature_names_in_
-        cols = map_model_features(
-            model, ["mono_0", "mono_1"], ["di_0", "di_1"], "mono_di")
-        assert cols == ["mono_0", "mono_1", "di_0"]
-
-    def test_with_feature_names(self):
-        model = MagicMock()
-        model.feature_names_in_ = np.array(['4', '5', '6', '7'])
-        model.n_features_in_ = 4
-        cols = map_model_features(
-            model,
-            ["mono_0", "mono_1", "mono_2"],
-            ["di_0", "di_1"],
-            "mono_di",
-        )
-        assert len(cols) > 0
-
-
-class TestComputePwmSummary:
-    def test_with_mono_cols(self):
-        df = pd.DataFrame({
-            "mono_0": [1.0, 2.0, 3.0],
-            "mono_1": [0.5, 1.5, 2.5],
-        })
-        result = compute_pwm_summary(df, ["mono_0", "mono_1"], [])
-        assert "pwm_mean_mono" in result.columns
-        assert "pwm_best_mono" in result.columns
-        assert "pwm_n_high_mono" in result.columns
-        assert "pwm_consensus" in result.columns
-
-    def test_empty_cols(self):
-        df = pd.DataFrame({"x": [1, 2]})
-        result = compute_pwm_summary(df, [], [])
-        assert result["pwm_mean_mono"].tolist() == [0.0, 0.0]
-        assert result["pwm_mean_di"].tolist() == [0.0, 0.0]
+class TestStandardise:
+    def test_training_mean_and_sd(self):
+        spec = {"scaler_mean": [1.0, 10.0], "scaler_scale": [2.0, 5.0]}
+        X = np.array([[1.0, 10.0], [3.0, 20.0]])
+        assert np.allclose(standardise(X, spec), [[0.0, 0.0], [1.0, 2.0]])
 
 
 # =============================================================================
@@ -713,7 +667,7 @@ class TestParseArguments:
         assert args.fasta == 'in.fa'
         assert args.tf_name == 'CTCF'
         assert args.pwm_type == 'mono_di'
-        assert args.frame == 301
+        assert args.frame == 300
         assert args.step == 150
         assert args.fdr == 0.1
         assert args.skip_null is False

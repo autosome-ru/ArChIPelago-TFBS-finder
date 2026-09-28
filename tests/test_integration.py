@@ -44,8 +44,9 @@ from scanning_tool import (
     generate_windows,
     windows_to_fasta,
     reverse_complement,
-    get_pwm_files,
     find_model_file,
+    load_model,
+    model_pwm_files,
     get_available_models,
     validate_paths,
     build_feature_matrix,
@@ -88,9 +89,9 @@ def real_di_pwm_dir(project_root):
 
 @pytest.fixture
 def real_models_dir(project_root):
-    d = project_root / "Models_sklearn13"
+    d = project_root / "Models"
     if not d.exists():
-        pytest.skip("Models_sklearn13 directory not found")
+        pytest.skip("Models directory not found")
     return d
 
 
@@ -110,7 +111,7 @@ def real_fasta_file(project_root):
 
 @pytest.fixture
 def sarus_jar(project_root):
-    jar = project_root.parent / "sarus" / "releases" / "sarus-2.0.1.jar"
+    jar = project_root.parent / "sarus" / "releases" / "sarus-2.2.3.jar"
     if not jar.exists():
         pytest.skip("SARUS jar not found")
     return jar
@@ -171,11 +172,6 @@ class TestRealPWMFiles:
         ctcf = real_mono_pwm_dir / "CTCF"
         assert len(list(ctcf.glob("*.pwm"))) >= 50
 
-    def test_get_pwm_files_sorts_numerically(self, real_mono_pwm_dir):
-        """get_pwm_files must return PWMs in numerical order."""
-        files = get_pwm_files(real_mono_pwm_dir, "CTCF", ".pwm")
-        nums = [int(f.stem) for f in files if f.stem.isdigit()]
-        assert nums == sorted(nums)
 
 
 # =============================================================================
@@ -185,64 +181,31 @@ class TestRealPWMFiles:
 @pytest.mark.integration
 @pytest.mark.skipif(not IMPORTS_AVAILABLE, reason="Required imports not available")
 class TestRealModelFiles:
-    """Validate pre-trained model files."""
+    """Validate pre-trained model files: one model per TF and PWM type."""
 
-    def test_ctcf_model_files_exist(self, real_models_dir):
-        ctcf_dir = real_models_dir / "CTCF"
-        assert ctcf_dir.exists()
-        sav_files = list(ctcf_dir.glob("*.sav"))
-        assert len(sav_files) > 0, "No .sav files for CTCF"
+    def test_every_tf_has_three_models(self, real_models_dir):
+        for tf in AVAILABLE_TFS:
+            assert sorted(get_available_models(real_models_dir, tf)) == sorted(PWM_TYPES), tf
 
-    def test_find_model_file_mono(self, real_models_dir):
-        p = find_model_file(real_models_dir, "CTCF", "mono")
-        assert p is not None
-        assert p.exists()
-        assert "mono_RF_on_all_PWMs" in p.name
-
-    def test_find_model_file_di(self, real_models_dir):
-        p = find_model_file(real_models_dir, "CTCF", "di")
-        assert p is not None
-        assert p.exists()
-        assert "di_RF_on_all_PWMs" in p.name
-
-    def test_find_model_file_mono_di(self, real_models_dir):
-        p = find_model_file(real_models_dir, "CTCF", "mono_di")
-        assert p is not None
-        assert p.exists()
-        assert "mono_di_full_MODEL_all_features" in p.name
-
-    def test_model_loadable_and_has_predict(self, real_models_dir):
-        p = find_model_file(real_models_dir, "CTCF", "mono")
-        if p is None:
-            pytest.skip("No mono model")
-        model = joblib.load(str(p))
+    @pytest.mark.parametrize("pwm_type", ["mono", "di", "mono_di"])
+    def test_ctcf_model_and_spec(self, real_models_dir, real_mono_pwm_dir,
+                                 real_di_pwm_dir, pwm_type):
+        model, spec = load_model(real_models_dir, "CTCF", pwm_type)
         assert hasattr(model, "predict_proba")
-        assert hasattr(model, "predict")
+        files = model_pwm_files(spec, real_mono_pwm_dir, real_di_pwm_dir, "CTCF")
+        assert len(files) == model.n_features_in_
+        kinds = {f.split("_")[0] for f in spec["features"]}
+        assert kinds == ({"mono", "di"} if pwm_type == "mono_di" else {pwm_type})
 
-    def test_model_prediction_shape(self, real_models_dir, real_mono_pwm_dir):
-        """Load a mono model and make a dummy prediction."""
-        p = find_model_file(real_models_dir, "CTCF", "mono")
-        if p is None:
-            pytest.skip("No mono model")
-        model = joblib.load(str(p))
-
-        n_features = model.n_features_in_
-        X_test = np.random.randn(10, n_features)
-        probs = model.predict_proba(X_test)
-
-        assert probs.shape == (10, 2)
-        assert np.all(probs >= 0) and np.all(probs <= 1)
-
-    def test_available_models_for_ctcf(self, real_models_dir):
-        models = get_available_models(real_models_dir, "CTCF")
-        assert len(models) > 0, "No available models for CTCF"
-
-    def test_many_tfs_have_models(self, real_models_dir):
-        """At least 30 TFs should have model directories."""
-        model_tfs = {d.name for d in real_models_dir.iterdir() if d.is_dir()}
-        have_models = sum(1 for tf in AVAILABLE_TFS if tf in model_tfs)
-        assert have_models >= 30, (
-            f"Only {have_models} of {len(AVAILABLE_TFS)} TFs have models")
+    def test_every_model_matches_its_pwms(self, real_models_dir, real_mono_pwm_dir,
+                                          real_di_pwm_dir):
+        """Each model uses every PWM of its type(s) of the TF, each exactly once."""
+        for tf in AVAILABLE_TFS:
+            n_mono = len(list((real_mono_pwm_dir / tf).glob("*.pwm")))
+            n_di = len(list((real_di_pwm_dir / tf).glob("*.dpwm")))
+            for pwm_type, n in (("mono", n_mono), ("di", n_di), ("mono_di", n_mono + n_di)):
+                model, spec = load_model(real_models_dir, tf, pwm_type)
+                assert len(set(spec["features"])) == model.n_features_in_ == n, (tf, pwm_type)
 
 
 # =============================================================================
@@ -346,13 +309,9 @@ class TestPipelineIntegration:
     def test_mono_model_prediction_with_real_features(
         self, real_models_dir, real_mono_pwm_dir
     ):
-        """Load mono model, build random features with matching shape, predict."""
-        model_path = find_model_file(real_models_dir, "CTCF", "mono")
-        if model_path is None:
-            pytest.skip("No mono model")
-        model = joblib.load(str(model_path))
-        n = model.n_features_in_
-        X = np.random.randn(20, n)
+        """Load the mono model, predict on random standardised features."""
+        model, spec = load_model(real_models_dir, "CTCF", "mono")
+        X = np.random.randn(20, len(spec["features"]))
         probs = model.predict_proba(X)[:, 1]
         assert probs.shape == (20,)
         assert np.all((probs >= 0) & (probs <= 1))
