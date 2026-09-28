@@ -25,12 +25,12 @@ Usage examples:
     python scanning_tool.py --list_tfs
 
     # Scan with custom window size and disable null calibration
-    python scanning_tool.py -f sequences.fasta --tf CTCF --frame 301 --step 50 --no-null
+    python scanning_tool.py -f sequences.fasta --tf CTCF --frame 300 --step 50 --no-null
 """
 
 import os
 import sys
-import re
+import json
 import argparse
 import subprocess
 import tempfile
@@ -95,7 +95,7 @@ class ScanConfig:
     pwm_di_dir: Path
     sarus_jar: Path
     pwm_type: str = 'mono_di'
-    frame: int = 301
+    frame: int = 300
     step: int = 150
     fdr_threshold: float = 0.1
     n_null_shuffles: int = 50
@@ -169,56 +169,63 @@ def reverse_complement(seq: str) -> str:
 # PWM Handling and SARUS Scoring
 # =============================================================================
 
-def _extract_pwm_number(path: Path) -> int:
-    """Numerical sort key for PWM filenames (0.pwm, 1.pwm, ..., 10.pwm)."""
-    m = re.match(r'^(\d+)', path.stem)
-    return int(m.group(1)) if m else 999999
-
-
-def get_pwm_files(pwm_dir: Path, tf_name: str, ext: str = '.pwm') -> List[Path]:
-    """Get numerically sorted list of PWM files for a TF."""
-    d = pwm_dir / tf_name
-    if not d.exists():
-        return []
-    return sorted(d.glob(f"*{ext}"), key=_extract_pwm_number)
-
-
 def find_model_file(models_dir: Path, tf_name: str,
                     pwm_type: str) -> Optional[Path]:
-    """Locate the appropriate .sav model file."""
-    d = models_dir / tf_name
-    if not d.exists():
+    """Model file <models_dir>/<TF>/ArChIPelago_<TF>_<pwm_type>.sav, or None."""
+    if pwm_type not in PWM_TYPES:
         return None
-    suffix_map = {
-        'mono':    'mono_RF_on_all_PWMs',
-        'di':      'di_RF_on_all_PWMs',
-        'mono_di': 'mono_di_full_MODEL_all_features',
-    }
-    suffix = suffix_map.get(pwm_type)
-    if not suffix:
-        return None
-    # Prefer base model (no SLIM/ChIPMunk extensions)
-    for f in d.glob("*.sav"):
-        if suffix in f.name and not any(
-                x in f.name for x in ['SLIM', 'ChIPMunk']):
-            return f
-    for f in d.glob("*.sav"):
-        if suffix in f.name:
-            return f
-    return None
+    p = Path(models_dir) / tf_name / f"ArChIPelago_{tf_name}_{pwm_type}.sav"
+    return p if p.exists() else None
+
+
+def load_model(models_dir: Path, tf_name: str, pwm_type: str):
+    """
+    Load the Random Forest of a TF and its feature specification (the .json
+    next to the .sav): 'features' = the PWM features in the order the model was
+    fitted with ('mono_<k>' = PWMs_mono_HUMAN/<TF>/<k>.pwm, 'di_<k>' =
+    PWMs_di_HUMAN/<TF>/<k>.dpwm), 'scaler_mean' / 'scaler_scale' = mean and
+    standard deviation of each feature on the human training set.
+
+    Returns (model, spec).
+    """
+    path = find_model_file(models_dir, tf_name, pwm_type)
+    if path is None:
+        raise FileNotFoundError(
+            f"No {pwm_type} model for {tf_name} in {models_dir}")
+    with open(path.with_suffix('.json')) as fh:
+        spec = json.load(fh)
+    model = joblib.load(str(path))
+    n = len(spec['features'])
+    if not (model.n_features_in_ == n == len(spec['scaler_mean'])
+            == len(spec['scaler_scale'])):
+        raise ValueError(
+            f"{path}: the model expects {model.n_features_in_} features, "
+            f"the specification lists {n}")
+    return model, spec
 
 
 def get_available_models(models_dir: Path, tf_name: str) -> Dict[str, Path]:
-    """Get available model files for a transcription factor."""
-    d = models_dir / tf_name
-    if not d.exists():
-        return {}
+    """Model files of a TF by PWM type."""
     models = {}
-    for f in d.glob("*.sav"):
-        key = f.stem.replace(f'model_{tf_name}_HUMAN_', '').replace(
-            f'finalized_model_{tf_name}_HUMAN_', '')
-        models[key] = f
+    for pwm_type in PWM_TYPES:
+        p = find_model_file(models_dir, tf_name, pwm_type)
+        if p is not None:
+            models[pwm_type] = p
     return models
+
+
+def model_pwm_files(spec: dict, pwm_mono_dir: Path, pwm_di_dir: Path,
+                    tf_name: str) -> List[Tuple[str, Path]]:
+    """(feature, PWM file) for every feature of the model, in model order."""
+    out = []
+    for feat in spec['features']:
+        kind, k = feat.split('_')
+        p = (Path(pwm_mono_dir) / tf_name / f"{k}.pwm" if kind == 'mono'
+             else Path(pwm_di_dir) / tf_name / f"{k}.dpwm")
+        if not p.exists():
+            raise FileNotFoundError(f"PWM file of feature {feat} not found: {p}")
+        out.append((feat, p))
+    return out
 
 
 def validate_paths(config: ScanConfig, logger: logging.Logger) -> bool:
@@ -253,15 +260,16 @@ def run_sarus(sarus_jar, fasta_file, pwm_file, output_file, is_di=False):
     return r.returncode == 0 and Path(output_file).exists()
 
 
-def scan_all_pwms(sarus_jar, fasta_file, pwm_files, out_dir, is_di=False):
-    """Scan with all PWMs; returns {pwm_stem: score_file_path}."""
+def scan_all_pwms(sarus_jar, fasta_file, pwm_files, out_dir):
+    """Scan with every (feature, PWM file); returns {feature: score_file}."""
     out_dir.mkdir(parents=True, exist_ok=True)
     results = {}
-    tag = 'di' if is_di else 'mono'
-    for pwm in pwm_files:
-        out_f = out_dir / f"{pwm.stem}_{tag}.tab"
-        if run_sarus(sarus_jar, fasta_file, pwm, out_f, is_di):
-            results[pwm.stem] = out_f
+    for feat, pwm in pwm_files:
+        out_f = out_dir / f"{feat}.tab"
+        if not run_sarus(sarus_jar, fasta_file, pwm, out_f,
+                         is_di=feat.startswith('di_')):
+            raise RuntimeError(f"SARUS failed on {pwm}")
+        results[feat] = out_f
     return results
 
 
@@ -269,91 +277,29 @@ def scan_all_pwms(sarus_jar, fasta_file, pwm_files, out_dir, is_di=False):
 # Feature Matrix Construction and Model Interface
 # =============================================================================
 
-def build_feature_matrix(windows, mono_scores, di_scores,
-                         mono_pwms, di_pwms):
+def build_feature_matrix(windows, score_files, features):
     """
-    Build the feature matrix in the exact column order used during training:
-    [mono_0, mono_1, ..., mono_N, di_0, di_1, ..., di_M].
-
-    Returns (DataFrame, mono_col_names, di_col_names).
+    Feature matrix with one column per model feature, in model order,
+    plus window_id, sequence and position.
     """
     base = pd.DataFrame({
         'window_id': [w[0] for w in windows],
         'sequence':  [w[1] for w in windows],
         'position':  [w[2] for w in windows],
     })
-    mono_cols, di_cols = [], []
-    score_series = {}
-    for pwm in mono_pwms:
-        if pwm.stem in mono_scores:
-            col = f"mono_{pwm.stem}"
-            try:
-                scores = pd.read_csv(
-                    mono_scores[pwm.stem], header=None, sep='\t')[0].values
-                if len(scores) == len(windows):
-                    score_series[col] = scores
-                    mono_cols.append(col)
-            except Exception:
-                pass
-    for pwm in di_pwms:
-        if pwm.stem in di_scores:
-            col = f"di_{pwm.stem}"
-            try:
-                scores = pd.read_csv(
-                    di_scores[pwm.stem], header=None, sep='\t')[0].values
-                if len(scores) == len(windows):
-                    score_series[col] = scores
-                    di_cols.append(col)
-            except Exception:
-                pass
-    if score_series:
-        df = pd.concat([base, pd.DataFrame(score_series)], axis=1)
-    else:
-        df = base
-    return df, mono_cols, di_cols
+    cols = {}
+    for feat in features:
+        scores = pd.read_csv(score_files[feat], header=None, sep='\t')[0].values
+        if len(scores) != len(windows):
+            raise RuntimeError(
+                f"{feat}: {len(scores)} SARUS scores for {len(windows)} windows")
+        cols[feat] = scores
+    return pd.concat([base, pd.DataFrame(cols)], axis=1)
 
 
-def map_model_features(model, mono_cols, di_cols, pwm_type):
-    """
-    Map model feature names to the scanning feature columns.
-
-    Training data layout: columns 0-3 = metadata, column 4+ = PWM scores
-    in order [mono_0, ..., mono_N, di_0, ..., di_M].
-    """
-    if not hasattr(model, 'feature_names_in_'):
-        all_cols = mono_cols + di_cols
-        n_expected = getattr(model, 'n_features_in_', len(all_cols))
-        return all_cols[:n_expected]
-
-    numeric_feats = [n for n in model.feature_names_in_
-                     if not n.startswith('pred')]
-    if pwm_type == 'mono_di':
-        n_mono_train = (len(numeric_feats) + 1) // 2
-    elif pwm_type == 'mono':
-        n_mono_train = len(numeric_feats)
-    else:
-        n_mono_train = 0
-
-    selected = []
-    for name in model.feature_names_in_:
-        if name.startswith('pred'):
-            continue
-        try:
-            idx = int(name) - 4
-        except ValueError:
-            continue
-        if idx < 0:
-            continue
-        if n_mono_train > 0 and idx < n_mono_train:
-            if idx < len(mono_cols):
-                selected.append(mono_cols[idx])
-        else:
-            di_idx = idx - n_mono_train
-            if di_idx < len(di_cols):
-                selected.append(di_cols[di_idx])
-
-    n_expected = getattr(model, 'n_features_in_', 0)
-    return selected if selected else (mono_cols + di_cols)[:n_expected]
+def standardise(X: np.ndarray, spec: dict) -> np.ndarray:
+    """Standardise with the training-set mean and sd of each feature."""
+    return (X - np.asarray(spec['scaler_mean'])) / np.asarray(spec['scaler_scale'])
 
 
 def compute_pwm_summary(df, mono_cols, di_cols, model=None, feat_cols=None):
@@ -423,52 +369,31 @@ def scan_sequence(config: ScanConfig, verbose=True,
         logger.warning("No valid windows generated from input sequences.")
         return None
 
-    # 2. Get PWMs
-    mono_pwms = (get_pwm_files(config.pwm_mono_dir, config.tf_name, '.pwm')
-                 if config.pwm_type in ('mono', 'mono_di') else [])
-    di_pwms = (get_pwm_files(config.pwm_di_dir, config.tf_name, '.dpwm')
-               if config.pwm_type in ('di', 'mono_di') else [])
-    if not mono_pwms and not di_pwms:
-        logger.error(f"No PWM files found for {config.tf_name}.")
-        return None
+    # 2. Load the model and the PWMs of its features
+    model, spec = load_model(config.models_dir, config.tf_name, config.pwm_type)
+    pwm_files = model_pwm_files(spec, config.pwm_mono_dir, config.pwm_di_dir,
+                                config.tf_name)
+    feat_cols = spec['features']
 
-    # 3. Load model
-    model_path = find_model_file(config.models_dir, config.tf_name,
-                                 config.pwm_type)
-    if model_path is None:
-        logger.error(f"No model file found for {config.tf_name} "
-                     f"({config.pwm_type}).")
-        return None
-    model = joblib.load(str(model_path))
-
-    # 4. Scan with SARUS
+    # 3. Scan with SARUS
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
         win_fasta = tmp / "windows.fasta"
         windows_to_fasta(windows, win_fasta)
-        feat_dir = tmp / "features"
-
-        mono_scores = (scan_all_pwms(
-            config.sarus_jar, win_fasta, mono_pwms, feat_dir, is_di=False
-        ) if mono_pwms else {})
-        di_scores = (scan_all_pwms(
-            config.sarus_jar, win_fasta, di_pwms, feat_dir, is_di=True
-        ) if di_pwms else {})
-
-        feature_df, mono_cols, di_cols = build_feature_matrix(
-            windows, mono_scores, di_scores, mono_pwms, di_pwms)
-
-    # 5. Select features matching model expectations
-    feat_cols = map_model_features(model, mono_cols, di_cols, config.pwm_type)
+        score_files = scan_all_pwms(config.sarus_jar, win_fasta, pwm_files,
+                                    tmp / "features")
+        feature_df = build_feature_matrix(windows, score_files, feat_cols)
     if verbose:
         logger.info(f"  Windows: {len(windows)}, Features: {len(feat_cols)}")
 
-    # 6. Predict
-    X = feature_df[feat_cols].values
+    # 4. Predict on the features standardised with the training mean and sd
+    X = standardise(feature_df[feat_cols].values, spec)
     probs = model.predict_proba(X)[:, 1]
     feature_df['predicted_probability'] = probs
 
-    # 7. Compute per-window PWM summary scores
+    # 5. Per-window PWM summary scores
+    mono_cols = [f for f in feat_cols if f.startswith('mono_')]
+    di_cols = [f for f in feat_cols if f.startswith('di_')]
     feature_df = compute_pwm_summary(feature_df, mono_cols, di_cols,
                                      model, feat_cols)
 
@@ -488,11 +413,12 @@ def scan_sequence(config: ScanConfig, verbose=True,
 
 def dinucleotide_shuffle(seq: str, rng=None) -> str:
     """
-    Shuffle a DNA sequence while preserving dinucleotide frequencies.
-
-    Uses the Altschul-Erickson algorithm: build an Eulerian path over the
-    dinucleotide graph, which preserves exact edge (dinucleotide) counts.
-    Falls back to mononucleotide shuffle if the graph is disconnected.
+    Shuffle a DNA sequence while preserving its dinucleotide counts exactly
+    (Altschul-Erickson / Kandel et al.): the last exit edge of every
+    nucleotide except the final one is drawn at random until these edges form
+    a tree rooted at the final nucleotide; the remaining exit edges are
+    shuffled and a walk from the first nucleotide then uses every edge once.
+    The result starts and ends with the same nucleotides as the input.
     """
     if rng is None:
         rng = np.random.default_rng()
@@ -501,39 +427,46 @@ def dinucleotide_shuffle(seq: str, rng=None) -> str:
     if n <= 2:
         return seq
 
-    # Build adjacency lists
     edges = defaultdict(list)
-    for i in range(n - 1):
-        edges[seq[i]].append(seq[i + 1])
+    for a, b in zip(seq[:-1], seq[1:]):
+        edges[a].append(b)
+    final = seq[-1]
 
-    # Shuffle each adjacency list, reserving last edge for completion
-    last_edge = {}
-    for nuc in edges:
-        lst = edges[nuc]
-        rng.shuffle(lst)
-        last_edge[nuc] = lst.pop()
+    # random last-edge tree rooted at the final nucleotide
+    while True:
+        last_idx = {v: int(rng.integers(len(out))) for v, out in edges.items()
+                    if v != final}
+        last = {v: edges[v][k] for v, k in last_idx.items()}
+        is_tree = True
+        for v in last:
+            seen, u = set(), v
+            while u != final:
+                if u in seen:
+                    is_tree = False
+                    break
+                seen.add(u)
+                u = last[u]
+            if not is_tree:
+                break
+        if is_tree:
+            break
 
-    # Build Eulerian path
+    order = {}
+    for v, out in edges.items():
+        rest = list(out)
+        if v in last_idx:
+            rest.pop(last_idx[v])
+        rng.shuffle(rest)
+        order[v] = rest + ([last[v]] if v in last else [])
+
     result = [seq[0]]
+    pos = defaultdict(int)
     current = seq[0]
-    for _ in range(n - 2):
-        if edges[current]:
-            nxt = edges[current].pop()
-        else:
-            nxt = last_edge.pop(current, None)
-            if nxt is None:
-                # Fallback: mononucleotide shuffle
-                lst = list(seq)
-                rng.shuffle(lst)
-                return ''.join(lst)
+    for _ in range(n - 1):
+        nxt = order[current][pos[current]]
+        pos[current] += 1
         result.append(nxt)
         current = nxt
-
-    if current in last_edge:
-        result.append(last_edge[current])
-    else:
-        result.append(rng.choice(list('ACGT')))
-
     return ''.join(result)
 
 
@@ -576,36 +509,28 @@ def benjamini_hochberg(pvalues: np.ndarray) -> np.ndarray:
 def build_null_distribution(config: ScanConfig, input_sequence: str,
                             logger: logging.Logger) -> np.ndarray:
     """
-    Build empirical null distribution by scanning dinucleotide-shuffled
-    versions of the input sequence with the same model.
-
-    Returns array of null predicted probabilities.
+    Empirical null distribution: predicted probabilities of all windows of
+    config.n_null_shuffles dinucleotide-shuffled copies of the input sequence
+    (seed 42), scanned together in one run with the same model.
     """
-    null_probs_all = []
-    rng = np.random.default_rng(42)
-
-    for i in range(config.n_null_shuffles):
-        null_seq = dinucleotide_shuffle(input_sequence, rng)
-        with tempfile.NamedTemporaryFile(
-                mode='w', suffix='.fasta', delete=False) as tmp_f:
+    null_seqs = generate_null_sequences(input_sequence, config.n_null_shuffles)
+    with tempfile.NamedTemporaryFile(
+            mode='w', suffix='.fasta', delete=False) as tmp_f:
+        for i, null_seq in enumerate(null_seqs):
             tmp_f.write(f">null_{i}\n{null_seq}\n")
-            null_fasta = Path(tmp_f.name)
+        null_fasta = Path(tmp_f.name)
 
-        cfg_null = copy(config)
-        cfg_null.fasta_file = null_fasta
-
+    cfg_null = copy(config)
+    cfg_null.fasta_file = null_fasta
+    # the temporary FASTA is removed even if the scan fails
+    try:
         null_result = scan_sequence(cfg_null, verbose=False, logger=logger)
-        if null_result is not None:
-            null_probs_all.extend(
-                null_result.predictions_df['predicted_probability'].values)
-
+    finally:
         null_fasta.unlink(missing_ok=True)
-
-        if (i + 1) % 10 == 0:
-            logger.info(
-                f"  Null calibration: {i + 1}/{config.n_null_shuffles}")
-
-    return np.array(null_probs_all)
+    logger.info(f"  Null calibration: {config.n_null_shuffles} shuffles")
+    if null_result is None:
+        return np.array([])
+    return null_result.predictions_df['predicted_probability'].values
 
 
 # =============================================================================
@@ -655,7 +580,7 @@ def export_results(preds: pd.DataFrame, config: ScanConfig,
     out_bed = output_dir / f"{config.tf_name}_significant.bed"
     with open(out_bed, 'w') as f:
         for _, row in sig.iterrows():
-            seq_id = row['window_id'].split('@')[0]
+            seq_id = row['window_id'].rsplit('@', 1)[0]  # sequence ids may themselves contain '@' (ENCODE)
             start = int(row['position'])
             end = start + config.frame
             score = int(row['predicted_probability'] * 1000)
@@ -746,8 +671,8 @@ Examples:
     # Scanning parameters
     parser.add_argument('--pwm_type', choices=PWM_TYPES, default='mono_di',
                         help='PWM type (default: mono_di)')
-    parser.add_argument('--frame', type=int, default=301,
-                        help='Sliding window size in bp (default: 301)')
+    parser.add_argument('--frame', type=int, default=300,
+                        help='Sliding window size in bp (default: 300, the length of the training sequences)')
     parser.add_argument('--step', type=int, default=150,
                         help='Sliding window step in bp (default: 150)')
 
@@ -777,13 +702,15 @@ Examples:
 def _resolve_default_paths(script_dir: Path) -> dict:
     """Auto-detect resource directories relative to the script."""
     candidates_models = [
-        script_dir / 'Models_sklearn13',
         script_dir / 'Models',
     ]
+    # SPRY-SARUS jar: release 2.2.3, else 2.0.1
     candidates_sarus = [
+        script_dir.parent / 'sarus' / 'releases' / 'sarus-2.2.3.jar',
+        script_dir / 'sarus' / 'releases' / 'sarus-2.2.3.jar',
+        script_dir / 'sarus' / 'sarus-2.2.3.jar',
         script_dir.parent / 'sarus' / 'releases' / 'sarus-2.0.1.jar',
         script_dir / 'sarus' / 'releases' / 'sarus-2.0.1.jar',
-        script_dir / 'sarus' / 'sarus-2.0.1.jar',
     ]
     defaults = {
         'models_dir': next(
