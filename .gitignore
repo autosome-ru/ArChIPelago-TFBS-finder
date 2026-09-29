@@ -7,8 +7,6 @@ scanning_tool_bp*.ipynb
 scanning_tool_bp*.ipynb
 improved_tfbs_scanner.ipynb
 
-# ── SARUS binary (user downloads separately) ─────────────────────────
-sarus/
 
 # ── Generated output ─────────────────────────────────────────────────
 CTCF_data/

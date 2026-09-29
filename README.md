@@ -70,9 +70,12 @@ TAL1   TF65   TFE2   USF2
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/autosome-ru/ArChIPelago-TFBS-finder.git
+git clone --recurse-submodules https://github.com/autosome-ru/ArChIPelago-TFBS-finder.git
 cd ArChIPelago-TFBS-finder
 ```
+
+`--recurse-submodules` also fetches SPRY-SARUS (`sarus/`, pinned at release 2.2.3). In a clone made without it,
+run `git submodule update --init --recursive`.
 
 ### 2. Python environment
 
@@ -96,8 +99,7 @@ java -version
 
 ### 4. SARUS jar
 
-Download `sarus-2.2.3.jar` from https://github.com/autosome-ru/sarus/releases and place it in
-`sarus/releases/`. The tool uses the first jar it finds among `../sarus/releases/sarus-2.2.3.jar` (the `sarus`
+The `sarus` submodule provides `sarus/releases/sarus-2.2.3.jar`. The tool uses the first jar it finds among `../sarus/releases/sarus-2.2.3.jar` (the `sarus`
 submodule when the tool is used inside the ArChIPelago repository), `sarus/releases/sarus-2.2.3.jar`,
 `sarus/sarus-2.2.3.jar`, `../sarus/releases/sarus-2.0.1.jar` and `sarus/releases/sarus-2.0.1.jar`;
 `--sarus_jar /path/to/sarus.jar` sets it explicitly.
@@ -109,7 +111,7 @@ submodule when the tool is used inside the ArChIPelago repository), `sarus/relea
 The models (`Models/`, 36 TFs x 3 models) and the human PWMs (`PWMs_mono_HUMAN/`, 1,495 monoPWMs;
 `PWMs_di_HUMAN/`, 780 diPWMs) are part of this repository; the same files are in the ArChIPelago Zenodo record
 ([10.5281/zenodo.14927303](https://doi.org/10.5281/zenodo.14927303): `Models.tar.gz`, `PWMs_mono_HUMAN.tar.gz`,
-`PWMs_di_HUMAN.tar.gz`). Only the SARUS jar has to be added.
+`PWMs_di_HUMAN.tar.gz`).
 
 Check the models of a TF:
 
@@ -150,7 +152,7 @@ ArChIPelago-TFBS-finder/
 │
 ├── sarus/
 │   └── releases/
-│       └── sarus-2.2.3.jar    # SPRY-SARUS (download separately)
+│       └── sarus-2.2.3.jar    # SPRY-SARUS (git submodule)
 │
 ├── synthetic_CTCF_demo.fasta  # demo input
 ├── realdata_CTCF_test.fasta   # CTCF test input

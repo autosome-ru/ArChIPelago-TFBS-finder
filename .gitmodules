@@ -1,0 +1,3 @@
+[submodule "sarus"]
+	path = sarus
+	url = https://github.com/autosome-ru/sarus.git
