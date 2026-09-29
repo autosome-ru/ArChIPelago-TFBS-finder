@@ -1,5 +1,11 @@
 # ArChIPelago-TFBS-finder
 
+[![tests](https://github.com/autosome-ru/ArChIPelago-TFBS-finder/actions/workflows/tests.yml/badge.svg)](https://github.com/autosome-ru/ArChIPelago-TFBS-finder/actions/workflows/tests.yml)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.14927303.svg)](https://doi.org/10.5281/zenodo.14927303)
+[![python](https://img.shields.io/badge/python-3.8--3.12-blue.svg)](requirements.txt)
+[![scikit-learn](https://img.shields.io/badge/scikit--learn-1.3-orange.svg)](requirements.txt)
+[![License: MIT](https://img.shields.io/badge/license-MIT-lightgrey.svg)](scanning_tool.py)
+
 Command-line tool that scans DNA sequences for transcription factor binding sites with the pre-trained
 ArChIPelago Random Forest models: each model combines the scores of all human mono- and dinucleotide PWMs of a
 transcription factor (TF). Hits are called against an empirical null distribution built from
@@ -79,7 +85,7 @@ run `git submodule update --init --recursive`.
 
 ### 2. Python environment
 
-Python 3.8 or later; the models need scikit-learn 1.3 or later.
+Python 3.8-3.12 and scikit-learn 1.3 (the models were saved with 1.3.0; scikit-learn 1.4 and later cannot use them, and the tool stops with an error).
 
 ```bash
 conda create -n archipelago python=3.8
@@ -261,13 +267,16 @@ python scanning_tool.py --list_models --tf CTCF
 
 The test suite has 115 tests: 81 unit tests (`tests/test_scanning_tool.py`, no data needed) and 34 integration
 tests (`tests/test_integration.py`) that use `Models/`, `PWMs_mono_HUMAN/`, `PWMs_di_HUMAN/`, the SARUS jar and
-the FASTA files of the repository; they need scikit-learn 1.3 or later to load the models.
+the FASTA files of the repository; they need scikit-learn 1.3 to load the models.
 
 ```bash
 pytest                                # all tests
 pytest tests/test_scanning_tool.py    # unit tests
 pytest tests/test_integration.py      # integration tests
 ```
+
+GitHub Actions runs the tests on Python 3.9 and 3.12 and a CTCF scan with null calibration on every push
+(`.github/workflows/tests.yml`).
 
 ---
 

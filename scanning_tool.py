@@ -35,6 +35,7 @@ import subprocess
 import tempfile
 import logging
 import random
+import warnings
 from copy import copy
 from pathlib import Path
 from typing import List, Dict, Optional, Tuple
@@ -45,6 +46,7 @@ import numpy as np
 import pandas as pd
 import joblib
 from Bio import SeqIO
+from sklearn.exceptions import InconsistentVersionWarning
 
 
 # Constants
@@ -183,7 +185,19 @@ def load_model(models_dir: Path, tf_name: str, pwm_type: str):
             f"No {pwm_type} model for {tf_name} in {models_dir}")
     with open(path.with_suffix('.json')) as fh:
         spec = json.load(fh)
-    model = joblib.load(str(path))
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always", InconsistentVersionWarning)
+        model = joblib.load(str(path))
+    for w in caught:
+        if issubclass(w.category, InconsistentVersionWarning):
+            saved = w.message.original_sklearn_version
+            current = w.message.current_sklearn_version
+            # the tree internals change between minor versions: other versions fail or give wrong probabilities
+            if saved.split('.')[:2] != current.split('.')[:2]:
+                raise RuntimeError(
+                    f"{path} was saved with scikit-learn {saved}; installed is {current}. "
+                    f"Install scikit-learn {'.'.join(saved.split('.')[:2])}.x "
+                    f"(pip install -r requirements.txt)")
     n = len(spec['features'])
     if not (model.n_features_in_ == n == len(spec['scaler_mean'])
             == len(spec['scaler_scale'])):
