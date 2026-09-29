@@ -1,0 +1,62 @@
+{
+ "tf": "USF2",
+ "pwm_set": "mono",
+ "model": "RandomForestClassifier(max_depth=6, max_samples=0.8, n_estimators=100, random_state=0), scikit-learn 1.3",
+ "features": [
+  "mono_0",
+  "mono_1",
+  "mono_2",
+  "mono_3",
+  "mono_4",
+  "mono_5",
+  "mono_6",
+  "mono_7",
+  "mono_8",
+  "mono_9",
+  "mono_10",
+  "mono_11"
+ ],
+ "scaler_mean": [
+  3.3223191067196534,
+  3.3223191067196534,
+  3.3263492079241344,
+  3.3234179778863013,
+  3.220537787637222,
+  3.1950363202558454,
+  4.3131461675834775,
+  4.254328559680217,
+  4.238680235980344,
+  4.236442285031651,
+  3.9036909924253673,
+  3.9447530081208524
+ ],
+ "scaler_scale": [
+  2.69157958138726,
+  2.69157958138726,
+  2.71794648040506,
+  2.7106760536552366,
+  2.756749293455723,
+  2.751642527211739,
+  2.196912308649519,
+  2.2298419786220514,
+  2.226401801974906,
+  2.2225514178555157,
+  2.329940469017876,
+  2.3222190482257616
+ ],
+ "training_set": {
+  "species": "human",
+  "chromosomes": "chr2-7, 9, 10, 13-20",
+  "n_positives": 6522,
+  "n_negatives": 157856
+ },
+ "human_test_set": {
+  "chromosomes": "chr1, 8, 21",
+  "n_positives": 1266,
+  "n_negatives": 50994,
+  "auROC": 0.9783,
+  "auPRC": 0.6428
+ },
+ "sarus": "--skipn --show-non-matching --output-scoring-mode score besthit",
+ "sequence_length": 300
+}

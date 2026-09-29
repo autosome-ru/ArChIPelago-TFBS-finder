@@ -1,8 +1,5 @@
-# ── Data directories (download from Zenodo) ──────────────────────────
-/Models
+# ── Local model folders not used by the tool ─────────────────────────
 Models_sklearn13/
-PWMs_mono_HUMAN/
-PWMs_di_HUMAN/
 
 # ── Legacy code & notebooks ──────────────────────────────────────────
 ArChIPelago-TFBS-finder legacy code/
@@ -16,10 +13,6 @@ sarus/
 # ── Generated output ─────────────────────────────────────────────────
 CTCF_data/
 
-# ── Validation metric tables ─────────────────────────────────────────
-Validation_*.txt
-GC_After_BiasAway.csv
-
 # ── Python / IDE artefacts ───────────────────────────────────────────
 __pycache__/
 *.pyc
@@ -28,6 +21,7 @@ __pycache__/
 dist/
 build/
 *.sav
+!Models/*/*.sav
 .pytest_cache/
 .ipynb_checkpoints/
 
