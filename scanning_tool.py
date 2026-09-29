@@ -7,24 +7,23 @@ Scans DNA sequences for transcription factor binding sites using pre-trained
 ArChIPelago Random Forest models that aggregate multiple PWM (Position Weight
 Matrix) scores.
 
-The tool addresses the false-positive problem inherent in repurposing a classifier
-as a scanner by constructing an **empirical null distribution** from
-dinucleotide-shuffled sequences and applying Benjamini-Hochberg FDR control.
+Windows are called against an empirical null distribution built from
+dinucleotide-shuffled sequences, with Benjamini-Hochberg FDR control.
 
 Author: Pavel Kravchenko
 License: MIT
 
 Usage examples:
-    # Scan for CTCF binding sites with default FDR threshold
+    # CTCF, default FDR threshold
     python scanning_tool.py -f sequences.fasta --tf CTCF
 
-    # Scan with specific FDR and PWM type
+    # FDR 0.05, monoPWM + diPWM model
     python scanning_tool.py -f sequences.fasta --tf CTCF --fdr 0.05 --pwm_type mono_di
 
-    # List available transcription factors
+    # supported TFs
     python scanning_tool.py --list_tfs
 
-    # Scan with custom window size and disable null calibration
+    # other step, no null calibration
     python scanning_tool.py -f sequences.fasta --tf CTCF --frame 300 --step 50 --no-null
 """
 
@@ -48,9 +47,7 @@ import joblib
 from Bio import SeqIO
 
 
-# =============================================================================
 # Constants
-# =============================================================================
 
 AVAILABLE_TFS = [
     'ANDR', 'AP2A', 'CEBPB', 'COE1', 'CTCF', 'E2F4', 'ERG', 'ESR1',
@@ -65,9 +62,7 @@ AMBIGUOUS_NUCLEOTIDES = set('BDHKMSVWYNR')
 PWM_TYPES = ['mono', 'di', 'mono_di']
 
 
-# =============================================================================
 # Logging
-# =============================================================================
 
 def setup_logging(verbose: bool = False) -> logging.Logger:
     """Configure logging for the scanning tool."""
@@ -80,9 +75,7 @@ def setup_logging(verbose: bool = False) -> logging.Logger:
     return logging.getLogger('archipelago')
 
 
-# =============================================================================
-# Data Classes
-# =============================================================================
+# Data classes
 
 @dataclass
 class ScanConfig:
@@ -113,9 +106,7 @@ class ScanResult:
     model_is_real: bool = True
 
 
-# =============================================================================
-# Sequence Processing
-# =============================================================================
+# Sequences and windows
 
 def parse_fasta(fasta_file: Path) -> List[Tuple[str, str]]:
     """Parse FASTA file; returns list of (id, sequence) tuples."""
@@ -165,9 +156,7 @@ def reverse_complement(seq: str) -> str:
     return ''.join(comp.get(b, 'N') for b in reversed(seq))
 
 
-# =============================================================================
-# PWM Handling and SARUS Scoring
-# =============================================================================
+# Models, PWMs and SARUS
 
 def find_model_file(models_dir: Path, tf_name: str,
                     pwm_type: str) -> Optional[Path]:
@@ -229,7 +218,7 @@ def model_pwm_files(spec: dict, pwm_mono_dir: Path, pwm_di_dir: Path,
 
 
 def validate_paths(config: ScanConfig, logger: logging.Logger) -> bool:
-    """Validate that all required paths exist."""
+    """Log every missing input path; True if none is missing."""
     errors = []
     if not Path(config.fasta_file).exists():
         errors.append(f"FASTA file not found: {config.fasta_file}")
@@ -273,9 +262,7 @@ def scan_all_pwms(sarus_jar, fasta_file, pwm_files, out_dir):
     return results
 
 
-# =============================================================================
-# Feature Matrix Construction and Model Interface
-# =============================================================================
+# Feature matrix
 
 def build_feature_matrix(windows, score_files, features):
     """
@@ -348,34 +335,29 @@ def compute_pwm_summary(df, mono_cols, di_cols, model=None, feat_cols=None):
     return df
 
 
-# =============================================================================
-# Complete Scanning Pipeline
-# =============================================================================
+# Scan
 
 def scan_sequence(config: ScanConfig, verbose=True,
                   logger=None) -> Optional[ScanResult]:
     """
-    Complete pipeline: FASTA -> windows -> SARUS scoring -> RF prediction.
+    FASTA -> windows -> SARUS scores -> Random Forest probabilities.
 
-    Returns all windows with their predicted probabilities and PWM summaries.
+    Returns all windows with their probabilities and PWM summaries.
     """
     if logger is None:
         logger = logging.getLogger('archipelago')
 
-    # 1. Parse and window
     sequences = parse_fasta(config.fasta_file)
     windows = generate_windows(sequences, config.frame, config.step)
     if not windows:
         logger.warning("No valid windows generated from input sequences.")
         return None
 
-    # 2. Load the model and the PWMs of its features
     model, spec = load_model(config.models_dir, config.tf_name, config.pwm_type)
     pwm_files = model_pwm_files(spec, config.pwm_mono_dir, config.pwm_di_dir,
                                 config.tf_name)
     feat_cols = spec['features']
 
-    # 3. Scan with SARUS
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
         win_fasta = tmp / "windows.fasta"
@@ -386,12 +368,11 @@ def scan_sequence(config: ScanConfig, verbose=True,
     if verbose:
         logger.info(f"  Windows: {len(windows)}, Features: {len(feat_cols)}")
 
-    # 4. Predict on the features standardised with the training mean and sd
+    # features standardised with the training mean and sd, as in training
     X = standardise(feature_df[feat_cols].values, spec)
     probs = model.predict_proba(X)[:, 1]
     feature_df['predicted_probability'] = probs
 
-    # 5. Per-window PWM summary scores
     mono_cols = [f for f in feat_cols if f.startswith('mono_')]
     di_cols = [f for f in feat_cols if f.startswith('di_')]
     feature_df = compute_pwm_summary(feature_df, mono_cols, di_cols,
@@ -407,9 +388,7 @@ def scan_sequence(config: ScanConfig, verbose=True,
     )
 
 
-# =============================================================================
-# Empirical Null Calibration
-# =============================================================================
+# Null calibration
 
 def dinucleotide_shuffle(seq: str, rng=None) -> str:
     """
@@ -472,7 +451,7 @@ def dinucleotide_shuffle(seq: str, rng=None) -> str:
 
 def generate_null_sequences(seq: str, n_shuffles: int = 50,
                             seed: int = 42) -> List[str]:
-    """Generate *n* dinucleotide-shuffled null sequences."""
+    """n_shuffles dinucleotide-shuffled copies of seq."""
     rng = np.random.default_rng(seed)
     return [dinucleotide_shuffle(seq, rng) for _ in range(n_shuffles)]
 
@@ -492,7 +471,7 @@ def compute_empirical_pvalues(observed: np.ndarray,
 
 
 def benjamini_hochberg(pvalues: np.ndarray) -> np.ndarray:
-    """Benjamini-Hochberg q-values with monotonicity enforcement."""
+    """Benjamini-Hochberg q-values (monotone in p)."""
     n = len(pvalues)
     if n == 0:
         return np.array([])
@@ -533,9 +512,7 @@ def build_null_distribution(config: ScanConfig, input_sequence: str,
     return null_result.predictions_df['predicted_probability'].values
 
 
-# =============================================================================
-# Export Functions
-# =============================================================================
+# Export
 
 def export_results(preds: pd.DataFrame, config: ScanConfig,
                    logger: logging.Logger) -> Dict[str, Path]:
@@ -552,14 +529,13 @@ def export_results(preds: pd.DataFrame, config: ScanConfig,
     extra_cols = ['empirical_pvalue', 'qvalue']
     export_cols = base_cols + [c for c in extra_cols if c in preds.columns]
 
-    # Full predictions
     out_full = output_dir / f"{config.tf_name}_predictions_full.tsv"
     preds[export_cols].to_csv(out_full, sep='\t', index=False,
                               float_format='%.6g')
     logger.info(f"Full predictions: {out_full}  ({len(preds)} windows)")
     outputs['full'] = out_full
 
-    # Significant hits (by q-value if available, else by prob threshold)
+    # significant windows: by q-value with the null calibration, else by probability
     if 'qvalue' in preds.columns:
         sig = preds[preds['qvalue'] <= config.fdr_threshold].sort_values(
             'qvalue')
@@ -576,7 +552,6 @@ def export_results(preds: pd.DataFrame, config: ScanConfig,
     logger.info(f"Significant hits: {out_sig}  ({len(sig)} windows)")
     outputs['significant'] = out_sig
 
-    # BED format
     out_bed = output_dir / f"{config.tf_name}_significant.bed"
     with open(out_bed, 'w') as f:
         for _, row in sig.iterrows():
@@ -624,9 +599,7 @@ def print_summary(preds: pd.DataFrame, config: ScanConfig,
     print("=" * 64)
 
 
-# =============================================================================
 # CLI
-# =============================================================================
 
 def parse_arguments(argv=None) -> argparse.Namespace:
     """Parse command-line arguments."""
@@ -648,19 +621,16 @@ Examples:
         """,
     )
 
-    # Required
     parser.add_argument('-f', '--fasta', type=str,
                         help='Path to input FASTA file')
     parser.add_argument('--tf', '--tf_name', dest='tf_name', type=str,
                         help='Transcription factor name (or "all")')
 
-    # Output
     parser.add_argument('-o', '--output', default=None,
                         help='Output directory (default: ./Results)')
 
-    # Paths
     parser.add_argument('--models_dir', default=None,
-                        help='Models directory (default: auto-detect)')
+                        help='Models directory (default: Models/ next to the script)')
     parser.add_argument('--pwm_mono_dir', default=None,
                         help='Mononucleotide PWM directory')
     parser.add_argument('--pwm_di_dir', default=None,
@@ -668,7 +638,6 @@ Examples:
     parser.add_argument('--sarus_jar', default=None,
                         help='Path to SARUS JAR file')
 
-    # Scanning parameters
     parser.add_argument('--pwm_type', choices=PWM_TYPES, default='mono_di',
                         help='PWM type (default: mono_di)')
     parser.add_argument('--frame', type=int, default=300,
@@ -676,7 +645,6 @@ Examples:
     parser.add_argument('--step', type=int, default=150,
                         help='Sliding window step in bp (default: 150)')
 
-    # FDR / thresholds
     parser.add_argument('--fdr', type=float, default=0.1,
                         help='FDR threshold for significance (default: 0.1)')
     parser.add_argument('--prob', type=float, default=0.7,
@@ -685,10 +653,8 @@ Examples:
     parser.add_argument('--n_null', type=int, default=50,
                         help='Number of null shuffles (default: 50)')
     parser.add_argument('--no-null', dest='skip_null', action='store_true',
-                        help='Skip empirical null calibration (faster, '
-                             'less accurate)')
+                        help='Skip the null calibration (no p- and q-values)')
 
-    # Misc
     parser.add_argument('-v', '--verbose', action='store_true',
                         help='Verbose output')
     parser.add_argument('--list_tfs', action='store_true',
@@ -700,7 +666,7 @@ Examples:
 
 
 def _resolve_default_paths(script_dir: Path) -> dict:
-    """Auto-detect resource directories relative to the script."""
+    """Default resource paths relative to the script."""
     candidates_models = [
         script_dir / 'Models',
     ]
@@ -729,7 +695,6 @@ def main(argv=None) -> int:
     args = parse_arguments(argv)
     logger = setup_logging(args.verbose)
 
-    # --list_tfs
     if args.list_tfs:
         print("\nAvailable Transcription Factors (36 from HOCOMOCO v11):")
         print("-" * 52)
@@ -740,14 +705,12 @@ def main(argv=None) -> int:
         print()
         return 0
 
-    # Resolve default paths
     script_dir = Path(__file__).resolve().parent
     defaults = _resolve_default_paths(script_dir)
 
     models_dir = (Path(args.models_dir) if args.models_dir
                   else defaults['models_dir'])
 
-    # --list_models
     if args.list_models:
         if not args.tf_name:
             print("Error: --tf is required with --list_models")
@@ -763,13 +726,11 @@ def main(argv=None) -> int:
         print()
         return 0
 
-    # Validate required arguments
     if not args.fasta or not args.tf_name:
         logger.error("Missing required arguments: --fasta and --tf")
         logger.error("Run with --help for usage information.")
         return 1
 
-    # Build config
     config = ScanConfig(
         fasta_file=Path(args.fasta).resolve(),
         tf_name=args.tf_name,
@@ -794,7 +755,6 @@ def main(argv=None) -> int:
     if not validate_paths(config, logger):
         return 1
 
-    # Determine TFs to scan
     if args.tf_name.lower() == 'all':
         tf_list = AVAILABLE_TFS
     else:
@@ -805,7 +765,6 @@ def main(argv=None) -> int:
             return 1
         tf_list = [args.tf_name]
 
-    # Scan each TF
     for tf in tf_list:
         tf_config = copy(config)
         tf_config.tf_name = tf
@@ -814,7 +773,6 @@ def main(argv=None) -> int:
         logger.info(f"Scanning for {tf}")
         logger.info(f"{'=' * 60}")
 
-        # Step 1: scan real sequence
         result = scan_sequence(tf_config, verbose=args.verbose, logger=logger)
         if result is None:
             logger.error(f"Scanning failed for {tf}. Skipping.")
@@ -822,7 +780,6 @@ def main(argv=None) -> int:
 
         preds = result.predictions_df
 
-        # Step 2: empirical null calibration (unless --no-null)
         null_pool = None
         if not config.skip_null:
             logger.info("Building empirical null distribution...")
@@ -841,10 +798,8 @@ def main(argv=None) -> int:
                     "Null calibration produced no scores; "
                     "falling back to probability threshold.")
 
-        # Step 3: export
         export_results(preds, tf_config, logger)
 
-        # Step 4: print summary
         print_summary(preds, tf_config, null_pool)
 
     return 0

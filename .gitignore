@@ -1,17 +1,15 @@
-# ── Local model folders not used by the tool ─────────────────────────
+# Local model folders
 Models_sklearn13/
 
-# ── Legacy code & notebooks ──────────────────────────────────────────
+# Legacy code & notebooks
 ArChIPelago-TFBS-finder legacy code/
-scanning_tool_bp*.ipynb
 scanning_tool_bp*.ipynb
 improved_tfbs_scanner.ipynb
 
-
-# ── Generated output ─────────────────────────────────────────────────
+# Generated output
 CTCF_data/
 
-# ── Python / IDE artefacts ───────────────────────────────────────────
+# Python
 __pycache__/
 *.pyc
 *.pyo
@@ -23,7 +21,7 @@ build/
 .pytest_cache/
 .ipynb_checkpoints/
 
-# ── macOS / editor ───────────────────────────────────────────────────
+# macOS and editors
 .DS_Store
 *.swp
 *.swo

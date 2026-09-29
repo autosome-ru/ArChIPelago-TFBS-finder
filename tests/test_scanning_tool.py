@@ -25,7 +25,6 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 from collections import Counter
 
-# Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from scanning_tool import (
@@ -68,9 +67,7 @@ from scanning_tool import (
 )
 
 
-# =============================================================================
 # Fixtures
-# =============================================================================
 
 @pytest.fixture
 def sample_fasta(tmp_path):
@@ -165,9 +162,7 @@ def sample_config(tmp_path, sample_fasta, mock_model_dir, sample_pwm_dir,
     )
 
 
-# =============================================================================
-# Test Constants
-# =============================================================================
+# Constants
 
 class TestConstants:
     """Test module-level constants."""
@@ -187,9 +182,7 @@ class TestConstants:
         assert PWM_TYPES == ['mono', 'di', 'mono_di']
 
 
-# =============================================================================
-# Test Data Classes
-# =============================================================================
+# Data Classes
 
 class TestScanConfig:
     def test_creation_defaults(self, sample_config):
@@ -233,9 +226,7 @@ class TestScanResult:
         assert r.model_is_real is True
 
 
-# =============================================================================
-# Test Sequence Processing
-# =============================================================================
+# Sequence Processing
 
 class TestParseFasta:
     def test_parse_basic(self, sample_fasta):
@@ -337,9 +328,7 @@ class TestReverseComplement:
         assert reverse_complement(seq) == expected
 
 
-# =============================================================================
-# Test PWM Handling
-# =============================================================================
+# PWM Handling
 
 class TestFindModelFile:
     @pytest.mark.parametrize("pwm_type", ["mono", "di", "mono_di"])
@@ -417,9 +406,7 @@ class TestValidatePaths:
         assert validate_paths(sample_config, logger) is False
 
 
-# =============================================================================
-# Test Feature Matrix
-# =============================================================================
+# Feature Matrix
 
 class TestBuildFeatureMatrix:
     def test_model_order(self, tmp_path):
@@ -447,9 +434,7 @@ class TestStandardise:
         assert np.allclose(standardise(X, spec), [[0.0, 0.0], [1.0, 2.0]])
 
 
-# =============================================================================
-# Test Empirical Null Calibration
-# =============================================================================
+# Empirical Null Calibration
 
 class TestDinucleotideShuffle:
     def test_preserves_length(self):
@@ -549,9 +534,7 @@ class TestBenjaminiHochberg:
         assert np.argmin(q) == np.argmin(pvals)
 
 
-# =============================================================================
-# Test Export Functions
-# =============================================================================
+# Export Functions
 
 class TestExportResults:
     def test_creates_output_files(self, tmp_path):
@@ -657,9 +640,7 @@ class TestPrintSummary:
         assert "FDR-significant" in captured.out
 
 
-# =============================================================================
-# Test CLI Argument Parsing
-# =============================================================================
+# CLI Argument Parsing
 
 class TestParseArguments:
     def test_basic(self):
@@ -724,9 +705,7 @@ class TestMain:
         assert rc == 1
 
 
-# =============================================================================
-# Test Model Predictions (mocked)
-# =============================================================================
+# Model Predictions (mocked)
 
 class TestModelPredictions:
     def test_prediction_shape_and_range(self):
@@ -756,9 +735,7 @@ class TestModelPredictions:
         np.testing.assert_array_equal(p1, p2)
 
 
-# =============================================================================
-# Test Performance
-# =============================================================================
+# Performance
 
 class TestPerformance:
     def test_large_feature_matrix(self):
@@ -787,9 +764,7 @@ class TestPerformance:
         assert len(p) == 1000
 
 
-# =============================================================================
 # Main
-# =============================================================================
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v', '--tb=short'])

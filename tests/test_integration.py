@@ -23,7 +23,6 @@ import pandas as pd
 from pathlib import Path
 from collections import Counter
 
-# Ensure the package root is importable
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 try:
@@ -61,9 +60,7 @@ from scanning_tool import (
 )
 
 
-# =============================================================================
-# Fixtures – real data paths
-# =============================================================================
+# Fixtures: real data paths
 
 @pytest.fixture
 def project_root():
@@ -97,29 +94,21 @@ def real_models_dir(project_root):
 
 @pytest.fixture
 def real_fasta_file(project_root):
-    """Use the synthetic demo FASTA shipped with the repo."""
-    f = project_root / "synthetic_CTCF_demo.fasta"
-    if not f.exists():
-        # Fallback to the real test FASTA
-        f = project_root / "realdata_CTCF_test.fasta"
-    if not f.exists():
-        f = project_root / "CTCF_data" / "test_pos_id_HUMAN.fasta"
-    if not f.exists():
-        pytest.skip("No suitable FASTA file found")
-    return f
+    """The synthetic demo FASTA shipped with the repo."""
+    return project_root / "synthetic_CTCF_demo.fasta"
 
 
 @pytest.fixture
 def sarus_jar(project_root):
-    jar = project_root.parent / "sarus" / "releases" / "sarus-2.2.3.jar"
-    if not jar.exists():
-        pytest.skip("SARUS jar not found")
-    return jar
+    """sarus/ of the ArChIPelago repository or the tool's own sarus submodule."""
+    for jar in (project_root.parent / "sarus" / "releases" / "sarus-2.2.3.jar",
+                project_root / "sarus" / "releases" / "sarus-2.2.3.jar"):
+        if jar.exists():
+            return jar
+    pytest.fail("sarus-2.2.3.jar not found; run git submodule update --init --recursive")
 
 
-# =============================================================================
 # PWM File Validation
-# =============================================================================
 
 @pytest.mark.integration
 @pytest.mark.skipif(not IMPORTS_AVAILABLE, reason="Required imports not available")
@@ -174,9 +163,7 @@ class TestRealPWMFiles:
 
 
 
-# =============================================================================
 # Model File Validation
-# =============================================================================
 
 @pytest.mark.integration
 @pytest.mark.skipif(not IMPORTS_AVAILABLE, reason="Required imports not available")
@@ -208,9 +195,7 @@ class TestRealModelFiles:
                 assert len(set(spec["features"])) == model.n_features_in_ == n, (tf, pwm_type)
 
 
-# =============================================================================
 # FASTA Processing with Real Data
-# =============================================================================
 
 @pytest.mark.integration
 @pytest.mark.skipif(not IMPORTS_AVAILABLE, reason="Required imports not available")
@@ -244,14 +229,11 @@ class TestFASTAProcessing:
         out = tmp_path / "windows.fa"
         n = windows_to_fasta(windows, out)
         assert n == len(windows)
-        # Read back
         back = list(SeqIO.parse(str(out), "fasta"))
         assert len(back) == n
 
 
-# =============================================================================
 # Data Consistency Across Directories
-# =============================================================================
 
 @pytest.mark.integration
 @pytest.mark.skipif(not IMPORTS_AVAILABLE, reason="Required imports not available")
@@ -272,9 +254,7 @@ class TestDataConsistency:
         assert len(common) > 0, "No TFs with both PWMs and models"
 
 
-# =============================================================================
 # Validate Config & Paths with Real Directories
-# =============================================================================
 
 @pytest.mark.integration
 @pytest.mark.skipif(not IMPORTS_AVAILABLE, reason="Required imports not available")
@@ -297,9 +277,7 @@ class TestRealValidatePaths:
         assert validate_paths(cfg, logger) is True
 
 
-# =============================================================================
 # Pipeline Pieces with Real Data
-# =============================================================================
 
 @pytest.mark.integration
 @pytest.mark.skipif(not IMPORTS_AVAILABLE, reason="Required imports not available")
@@ -343,9 +321,7 @@ class TestPipelineIntegration:
         pd.testing.assert_frame_equal(df, back)
 
 
-# =============================================================================
 # Null Calibration with Realistic Sequences
-# =============================================================================
 
 @pytest.mark.integration
 @pytest.mark.skipif(not IMPORTS_AVAILABLE, reason="Required imports not available")
@@ -356,7 +332,6 @@ class TestNullCalibrationIntegration:
         seqs = parse_fasta(real_fasta_file)
         if not seqs:
             pytest.skip("No sequences")
-        # Take first sequence
         _, seq = seqs[0]
         if has_ambiguous(seq):
             seq = seq.replace("N", "")
@@ -393,9 +368,7 @@ class TestNullCalibrationIntegration:
         assert q[:20].mean() < q[20:].mean()
 
 
-# =============================================================================
 # Export Functions with Real-ish Data
-# =============================================================================
 
 @pytest.mark.integration
 @pytest.mark.skipif(not IMPORTS_AVAILABLE, reason="Required imports not available")
@@ -426,7 +399,6 @@ class TestExportIntegration:
         logger = setup_logging(False)
         outputs = export_results(preds, cfg, logger)
 
-        # Check files exist
         assert outputs["full"].exists()
         assert outputs["significant"].exists()
         assert outputs["bed"].exists()
@@ -471,9 +443,7 @@ class TestExportIntegration:
         assert len(sig) == 2  # 0.9 and 0.6 are ≥ 0.5
 
 
-# =============================================================================
 # CLI Integration
-# =============================================================================
 
 @pytest.mark.integration
 @pytest.mark.skipif(not IMPORTS_AVAILABLE, reason="Required imports not available")
@@ -505,9 +475,7 @@ class TestCLIIntegration:
         assert rc == 1
 
 
-# =============================================================================
 # Edge Cases
-# =============================================================================
 
 @pytest.mark.integration
 @pytest.mark.skipif(not IMPORTS_AVAILABLE, reason="Required imports not available")
@@ -551,9 +519,7 @@ class TestEdgeCases:
         assert reverse_complement(seq) == seq
 
 
-# =============================================================================
 # Main
-# =============================================================================
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "--tb=short"])
