@@ -305,7 +305,7 @@ Kravchenko P., Vorontsov I.E., Grosse I., Makeev V.J., Kulakovskiy I.V., and Pen
 learning on top of multiple position weight matrices improves genomic prediction of transcription factor binding
 sites.
 
-Models, PWMs and data: Zenodo [10.5281/zenodo.14927303](https://doi.org/10.5281/zenodo.14927303).
+Models, PWMs and data: Zenodo [10.5281/zenodo.14927303](https://doi.org/10.5281/zenodo.14927303) (all versions); release v1.0.0: [10.5281/zenodo.23036475](https://doi.org/10.5281/zenodo.23036475).
 
 ---
 
