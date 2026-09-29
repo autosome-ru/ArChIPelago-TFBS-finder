@@ -17,7 +17,7 @@ dinucleotide-shuffled sequences, with Benjamini-Hochberg FDR control.
 1. [Models](#models)
 2. [Supported transcription factors](#supported-transcription-factors)
 3. [Installation](#installation)
-4. [Models and PWMs from Zenodo](#models-and-pwms-from-zenodo)
+4. [Models and PWMs](#models-and-pwms)
 5. [Directory layout](#directory-layout)
 6. [Usage](#usage)
 7. [Output files](#output-files)
@@ -104,16 +104,12 @@ submodule when the tool is used inside the ArChIPelago repository), `sarus/relea
 
 ---
 
-## Models and PWMs from Zenodo
+## Models and PWMs
 
-The models and PWM files are not part of this repository. Download them from the ArChIPelago Zenodo record
-([10.5281/zenodo.14927303](https://doi.org/10.5281/zenodo.14927303)) and extract them into the repository root:
-
-| Archive | Extracts to |
-|---|---|
-| `Models.tar.gz` | `Models/<TF>/ArChIPelago_<TF>_<mono\|di\|mono_di>.sav` and `.json` (36 TFs x 3 models) |
-| `PWMs_mono_HUMAN.tar.gz` | `PWMs_mono_HUMAN/<TF>/<k>.pwm` |
-| `PWMs_di_HUMAN.tar.gz` | `PWMs_di_HUMAN/<TF>/<k>.dpwm` |
+The models (`Models/`, 36 TFs x 3 models) and the human PWMs (`PWMs_mono_HUMAN/`, 1,495 monoPWMs;
+`PWMs_di_HUMAN/`, 780 diPWMs) are part of this repository; the same files are in the ArChIPelago Zenodo record
+([10.5281/zenodo.14927303](https://doi.org/10.5281/zenodo.14927303): `Models.tar.gz`, `PWMs_mono_HUMAN.tar.gz`,
+`PWMs_di_HUMAN.tar.gz`). Only the SARUS jar has to be added.
 
 Check the models of a TF:
 
@@ -132,7 +128,7 @@ ArChIPelago-TFBS-finder/
 ├── pytest.ini
 ├── README.md
 │
-├── Models/                    # from Zenodo (Models.tar.gz)
+├── Models/                    # Random Forest models (.sav) and feature specifications (.json)
 │   ├── CTCF/
 │   │   ├── ArChIPelago_CTCF_mono.sav
 │   │   ├── ArChIPelago_CTCF_mono.json
@@ -142,12 +138,12 @@ ArChIPelago-TFBS-finder/
 │   │   └── ArChIPelago_CTCF_mono_di.json
 │   └── .../
 │
-├── PWMs_mono_HUMAN/           # from Zenodo (PWMs_mono_HUMAN.tar.gz)
+├── PWMs_mono_HUMAN/           # monoPWMs
 │   ├── CTCF/
 │   │   └── <k>.pwm
 │   └── .../
 │
-├── PWMs_di_HUMAN/             # from Zenodo (PWMs_di_HUMAN.tar.gz)
+├── PWMs_di_HUMAN/             # diPWMs
 │   ├── CTCF/
 │   │   └── <k>.dpwm
 │   └── .../
@@ -263,8 +259,7 @@ python scanning_tool.py --list_models --tf CTCF
 
 The test suite has 115 tests: 81 unit tests (`tests/test_scanning_tool.py`, no data needed) and 34 integration
 tests (`tests/test_integration.py`) that use `Models/`, `PWMs_mono_HUMAN/`, `PWMs_di_HUMAN/`, the SARUS jar and
-the FASTA files of the repository; they are skipped when a directory is missing and need scikit-learn 1.3 or
-later to load the models.
+the FASTA files of the repository; they need scikit-learn 1.3 or later to load the models.
 
 ```bash
 pytest                                # all tests

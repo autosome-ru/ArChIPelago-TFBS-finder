@@ -1,0 +1,53 @@
+{
+ "tf": "PRGR",
+ "pwm_set": "di",
+ "model": "RandomForestClassifier(max_depth=6, max_samples=0.8, n_estimators=100, random_state=0), scikit-learn 1.3",
+ "features": [
+  "di_0",
+  "di_1",
+  "di_2",
+  "di_3",
+  "di_4",
+  "di_5",
+  "di_6",
+  "di_7",
+  "di_8"
+ ],
+ "scaler_mean": [
+  10.316120347627622,
+  9.035028932455207,
+  9.76015833187041,
+  9.7571156055161,
+  9.194109854502223,
+  9.794252433776263,
+  10.730154105358928,
+  8.012273856962553,
+  10.892555208426385
+ ],
+ "scaler_scale": [
+  3.6833136294591116,
+  3.808153475612877,
+  3.507115217586885,
+  3.5927382273340887,
+  3.670850531954213,
+  3.563840437178729,
+  3.0828864686647846,
+  4.101696270962923,
+  3.185744909257104
+ ],
+ "training_set": {
+  "species": "human",
+  "chromosomes": "chr2-7, 9, 10, 13-20",
+  "n_positives": 1260,
+  "n_negatives": 119372
+ },
+ "human_test_set": {
+  "chromosomes": "chr1, 8, 21",
+  "n_positives": 296,
+  "n_negatives": 29600,
+  "auROC": 0.8574,
+  "auPRC": 0.0668
+ },
+ "sarus": "--skipn --show-non-matching --output-scoring-mode score besthit",
+ "sequence_length": 300
+}
