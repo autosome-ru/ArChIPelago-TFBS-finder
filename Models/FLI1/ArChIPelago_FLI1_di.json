@@ -1,6 +1,8 @@
 {
  "tf": "FLI1",
  "pwm_set": "di",
+ "training_species": "human",
+ "pwm_species": "HUMAN",
  "model": "RandomForestClassifier(max_depth=6, max_samples=0.8, n_estimators=100, random_state=0), scikit-learn 1.3",
  "features": [
   "di_0",
@@ -12,39 +14,51 @@
   "di_6",
   "di_7"
  ],
+ "pwm_files": "mono_<k> = PWMs_mono_HUMAN/<TF>/<k>.pwm, di_<k> = PWMs_di_HUMAN/<TF>/<k>.dpwm",
  "scaler_mean": [
-  10.558026820104944,
-  11.908522264203848,
-  11.391434010927215,
-  11.666317523555344,
-  11.847057337984802,
-  12.204474873287465,
-  12.146186154205415,
-  10.033625647846408
+  10.356167923502975,
+  11.780441217791383,
+  11.219736317451622,
+  11.538989852835915,
+  11.7033304420777,
+  12.119162297123987,
+  12.018931097863375,
+  9.818191930216374
  ],
  "scaler_scale": [
-  5.141486194735378,
-  4.915096324847649,
-  4.882479475688055,
-  3.940839701153702,
-  4.123285503782648,
-  4.0126536045981,
-  3.9714279020134087,
-  4.715480106048905
+  5.045398771403013,
+  4.885757814199389,
+  4.880581537525497,
+  3.8873826498245534,
+  4.049390895659123,
+  3.940271640503072,
+  3.898354581082751,
+  4.669003326219903
  ],
  "training_set": {
   "species": "human",
-  "chromosomes": "chr2-7, 9, 10, 13-20",
-  "n_positives": 1346,
-  "n_negatives": 104762
+  "chromosomes": "chr2-7, 9-20, 22",
+  "negatives": "v3",
+  "n_positives": 821,
+  "n_negatives": 71842
  },
- "human_test_set": {
+ "test_set_same_species": {
+  "species": "human",
   "chromosomes": "chr1, 8, 21",
-  "n_positives": 256,
-  "n_negatives": 25400,
-  "auROC": 0.8762,
-  "auPRC": 0.0663
+  "n_positives": 128,
+  "n_negatives": 12796,
+  "auROC": 0.8807,
+  "auPRC": 0.0904
  },
+ "test_set_other_species": {
+  "species": "mouse",
+  "chromosomes": "chr1, 8, 19",
+  "n_positives": 520,
+  "n_negatives": 33033,
+  "auROC": 0.794,
+  "auPRC": 0.0918
+ },
+ "scaling": "every matrix (training and test) is standardised with scaler_mean / scaler_scale, the StandardScaler fitted on the training matrix; this is the scaling of the manuscript's evaluation",
  "sarus": "--skipn --show-non-matching --output-scoring-mode score besthit",
  "sequence_length": 300
 }

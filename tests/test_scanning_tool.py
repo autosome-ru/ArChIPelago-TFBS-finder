@@ -30,6 +30,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from scanning_tool import (
     # Constants
     AVAILABLE_TFS,
+    SPECIES,
     AMBIGUOUS_NUCLEOTIDES,
     PWM_TYPES,
     # Data classes
@@ -63,6 +64,7 @@ from scanning_tool import (
     print_summary,
     # CLI
     parse_arguments,
+    _resolve_default_paths,
     main,
 )
 
@@ -125,14 +127,16 @@ def mock_model_dir(tmp_path):
     feats = {"mono": ["mono_2", "mono_0", "mono_1"], "di": ["di_0", "di_1"],
              "mono_di": ["mono_2", "mono_0", "mono_1", "di_0", "di_1"]}
     rng = np.random.default_rng(0)
-    for pwm_type, f in feats.items():
-        X = rng.normal(size=(40, len(f)))
-        y = np.arange(40) % 2
-        model = RandomForestClassifier(n_estimators=3, random_state=0).fit(X, y)
-        jl.dump(model, ctcf_dir / f"ArChIPelago_CTCF_{pwm_type}.sav")
-        spec = {"tf": "CTCF", "pwm_type": pwm_type, "features": f,
-                "scaler_mean": [1.0] * len(f), "scaler_scale": [2.0] * len(f)}
-        (ctcf_dir / f"ArChIPelago_CTCF_{pwm_type}.json").write_text(json.dumps(spec))
+    for infix in ("", "_MOUSE"):
+        for pwm_type, f in feats.items():
+            X = rng.normal(size=(40, len(f)))
+            y = np.arange(40) % 2
+            model = RandomForestClassifier(n_estimators=3, random_state=0).fit(X, y)
+            jl.dump(model, ctcf_dir / f"ArChIPelago_CTCF{infix}_{pwm_type}.sav")
+            spec = {"tf": "CTCF", "pwm_type": pwm_type, "features": f,
+                    "scaler_mean": [1.0] * len(f), "scaler_scale": [2.0] * len(f)}
+            (ctcf_dir / f"ArChIPelago_CTCF{infix}_{pwm_type}.json").write_text(
+                json.dumps(spec))
     return tmp_path / "Models"
 
 
@@ -168,10 +172,16 @@ class TestConstants:
     """Test module-level constants."""
 
     def test_available_tfs_count(self):
-        assert len(AVAILABLE_TFS) == 36
+        assert len(AVAILABLE_TFS) == 35
+
+    def test_p53_removed(self):
+        assert 'P53' not in AVAILABLE_TFS
+
+    def test_species(self):
+        assert SPECIES == ['human', 'mouse']
 
     def test_available_tfs_contains_common_factors(self):
-        for tf in ['CTCF', 'P53', 'MYC', 'MAX', 'STAT1', 'GATA1']:
+        for tf in ['CTCF', 'MYC', 'MAX', 'STAT1', 'GATA1']:
             assert tf in AVAILABLE_TFS
 
     def test_ambiguous_nucleotides_set(self):
@@ -196,7 +206,7 @@ class TestScanConfig:
     def test_custom_values(self, tmp_path):
         cfg = ScanConfig(
             fasta_file=tmp_path / "x.fa",
-            tf_name="P53",
+            tf_name="MYC",
             output_dir=tmp_path,
             models_dir=tmp_path,
             pwm_mono_dir=tmp_path,
@@ -210,7 +220,7 @@ class TestScanConfig:
             prob_threshold=0.8,
             skip_null=True,
         )
-        assert cfg.tf_name == "P53"
+        assert cfg.tf_name == "MYC"
         assert cfg.frame == 500
         assert cfg.skip_null is True
 
@@ -342,12 +352,38 @@ class TestFindModelFile:
     def test_invalid_pwm_type(self, mock_model_dir):
         assert find_model_file(mock_model_dir, "CTCF", "bad") is None
 
+    @pytest.mark.parametrize("pwm_type", ["mono", "di", "mono_di"])
+    def test_find_mouse(self, mock_model_dir, pwm_type):
+        p = find_model_file(mock_model_dir, "CTCF", pwm_type, "mouse")
+        assert p.name == f"ArChIPelago_CTCF_MOUSE_{pwm_type}.sav"
+
+    def test_human_is_default(self, mock_model_dir):
+        assert (find_model_file(mock_model_dir, "CTCF", "mono")
+                == find_model_file(mock_model_dir, "CTCF", "mono", "human"))
+
+    def test_invalid_species(self, mock_model_dir):
+        assert find_model_file(mock_model_dir, "CTCF", "mono", "rat") is None
+
+    def test_mouse_model_absent(self, mock_model_dir):
+        (mock_model_dir / "CTCF" / "ArChIPelago_CTCF_MOUSE_mono.sav").unlink()
+        assert find_model_file(mock_model_dir, "CTCF", "mono", "mouse") is None
+        assert find_model_file(mock_model_dir, "CTCF", "mono") is not None
+
 
 class TestLoadModel:
     def test_model_and_spec(self, mock_model_dir):
         model, spec = load_model(mock_model_dir, "CTCF", "mono_di")
         assert model.n_features_in_ == len(spec["features"]) == 5
         assert spec["features"][0] == "mono_2"
+
+    def test_mouse_model_and_spec(self, mock_model_dir):
+        model, spec = load_model(mock_model_dir, "CTCF", "mono_di", "mouse")
+        assert model.n_features_in_ == len(spec["features"]) == 5
+
+    def test_missing_mouse_model_raises(self, mock_model_dir):
+        (mock_model_dir / "CTCF" / "ArChIPelago_CTCF_MOUSE_mono.sav").unlink()
+        with pytest.raises(FileNotFoundError, match="mouse"):
+            load_model(mock_model_dir, "CTCF", "mono", "mouse")
 
     def test_missing_model_raises(self, mock_model_dir):
         with pytest.raises(FileNotFoundError):
@@ -371,6 +407,11 @@ class TestGetAvailableModels:
     def test_missing_tf(self, mock_model_dir):
         models = get_available_models(mock_model_dir, "NONEXISTENT")
         assert models == {}
+
+    def test_mouse_models(self, mock_model_dir):
+        models = get_available_models(mock_model_dir, "CTCF", "mouse")
+        assert sorted(models) == ["di", "mono", "mono_di"]
+        assert all("_MOUSE_" in p.name for p in models.values())
 
 
 class TestModelPwmFiles:
@@ -655,13 +696,13 @@ class TestParseArguments:
 
     def test_all_options(self):
         args = parse_arguments([
-            '-f', 'in.fa', '--tf', 'P53',
+            '-f', 'in.fa', '--tf', 'MYC',
             '-o', '/tmp/out', '--pwm_type', 'mono',
             '--frame', '500', '--step', '100',
             '--fdr', '0.05', '--prob', '0.8',
             '--n_null', '20', '--no-null', '-v',
         ])
-        assert args.tf_name == 'P53'
+        assert args.tf_name == 'MYC'
         assert args.pwm_type == 'mono'
         assert args.frame == 500
         assert args.step == 100
@@ -670,6 +711,15 @@ class TestParseArguments:
         assert args.n_null == 20
         assert args.skip_null is True
         assert args.verbose is True
+
+    def test_species_default_and_mouse(self):
+        assert parse_arguments(['-f', 'in.fa', '--tf', 'CTCF']).species == 'human'
+        args = parse_arguments(['-f', 'in.fa', '--tf', 'CTCF', '--species', 'mouse'])
+        assert args.species == 'mouse'
+
+    def test_species_invalid(self):
+        with pytest.raises(SystemExit):
+            parse_arguments(['-f', 'in.fa', '--tf', 'CTCF', '--species', 'rat'])
 
     def test_list_tfs(self):
         args = parse_arguments(['--list_tfs'])
@@ -687,7 +737,8 @@ class TestMain:
         assert rc == 0
         captured = capsys.readouterr()
         assert "CTCF" in captured.out
-        assert "P53" in captured.out
+        assert "MYC" in captured.out
+        assert "P53" not in captured.out
 
     def test_missing_args(self):
         rc = main([])
@@ -768,3 +819,41 @@ class TestPerformance:
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v', '--tb=short'])
+
+
+class TestSpeciesDefaults:
+    def test_default_pwm_dirs_human(self, tmp_path):
+        d = _resolve_default_paths(tmp_path)
+        assert d['pwm_mono_dir'] == tmp_path / 'PWMs_mono_HUMAN'
+        assert d['pwm_di_dir'] == tmp_path / 'PWMs_di_HUMAN'
+
+    def test_default_pwm_dirs_mouse(self, tmp_path):
+        d = _resolve_default_paths(tmp_path, 'mouse')
+        assert d['pwm_mono_dir'] == tmp_path / 'PWMs_mono_MOUSE'
+        assert d['pwm_di_dir'] == tmp_path / 'PWMs_di_MOUSE'
+
+    def test_scan_config_species_default(self, sample_config):
+        assert sample_config.species == 'human'
+
+    def test_list_models_mouse(self, mock_model_dir, capsys):
+        assert main(['--list_models', '--tf', 'CTCF', '--species', 'mouse',
+                     '--models_dir', str(mock_model_dir)]) == 0
+        assert "mono_di" in capsys.readouterr().out
+        (mock_model_dir / "CTCF" / "ArChIPelago_CTCF_MOUSE_mono.sav").unlink()
+        (mock_model_dir / "CTCF" / "ArChIPelago_CTCF_MOUSE_di.sav").unlink()
+        (mock_model_dir / "CTCF" / "ArChIPelago_CTCF_MOUSE_mono_di.sav").unlink()
+        assert main(['--list_models', '--tf', 'CTCF', '--species', 'mouse',
+                     '--models_dir', str(mock_model_dir)]) == 1
+
+    def test_export_names(self, sample_config):
+        preds = pd.DataFrame({"window_id": ["s@0"], "position": [0],
+                              "predicted_probability": [0.9]})
+        logger = setup_logging(False)
+        human = export_results(preds, sample_config, logger)
+        assert human["full"].name == "CTCF_predictions_full.tsv"
+        assert human["bed"].name == "CTCF_significant.bed"
+        sample_config.species = 'mouse'
+        mouse = export_results(preds, sample_config, logger)
+        assert mouse["full"].name == "CTCF_MOUSE_predictions_full.tsv"
+        assert mouse["significant"].name == "CTCF_MOUSE_significant_prob0.7.tsv"
+        assert mouse["bed"].name == "CTCF_MOUSE_significant.bed"

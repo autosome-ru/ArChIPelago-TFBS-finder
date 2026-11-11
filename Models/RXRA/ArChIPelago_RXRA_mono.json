@@ -1,6 +1,8 @@
 {
  "tf": "RXRA",
  "pwm_set": "mono",
+ "training_species": "human",
+ "pwm_species": "HUMAN",
  "model": "RandomForestClassifier(max_depth=6, max_samples=0.8, n_estimators=100, random_state=0), scikit-learn 1.3",
  "features": [
   "mono_0",
@@ -13,41 +15,53 @@
   "mono_7",
   "mono_8"
  ],
+ "pwm_files": "mono_<k> = PWMs_mono_HUMAN/<TF>/<k>.pwm, di_<k> = PWMs_di_HUMAN/<TF>/<k>.dpwm",
  "scaler_mean": [
-  5.56412375676549,
-  5.563286678315805,
-  5.593137634573821,
-  5.4481757551957575,
-  5.5497053009790065,
-  5.048551054109606,
-  5.43421211138682,
-  5.497944344890788,
-  5.410413381308199
+  5.5908332440859825,
+  5.572960857784561,
+  5.558136169463604,
+  5.423303346897017,
+  5.534421138223646,
+  5.019059125663555,
+  5.422288951136773,
+  5.356994764914455,
+  5.398463272561455
  ],
  "scaler_scale": [
-  1.76812676046206,
-  1.7139295908590104,
-  1.6338670860566986,
-  1.6354574547810665,
-  1.6061196689119301,
-  1.592452517637394,
-  1.5899212094134532,
-  1.809442626575459,
-  1.43193209328432
+  1.7555883953748217,
+  1.7063829281893643,
+  1.62052780028324,
+  1.621150779787405,
+  1.5919313809303215,
+  1.5844136128931539,
+  1.583173971835998,
+  1.781391000984977,
+  1.4249897556614017
  ],
  "training_set": {
   "species": "human",
-  "chromosomes": "chr2-7, 9, 10, 13-20",
-  "n_positives": 3918,
-  "n_negatives": 187701
+  "chromosomes": "chr2-7, 9-20, 22",
+  "negatives": "v3",
+  "n_positives": 3030,
+  "n_negatives": 134697
  },
- "human_test_set": {
+ "test_set_same_species": {
+  "species": "human",
   "chromosomes": "chr1, 8, 21",
-  "n_positives": 786,
-  "n_negatives": 60127,
-  "auROC": 0.8273,
-  "auPRC": 0.0947
+  "n_positives": 532,
+  "n_negatives": 34929,
+  "auROC": 0.8279,
+  "auPRC": 0.1175
  },
+ "test_set_other_species": {
+  "species": "mouse",
+  "chromosomes": "chr1, 8, 19",
+  "n_positives": 1429,
+  "n_negatives": 31531,
+  "auROC": 0.8125,
+  "auPRC": 0.1919
+ },
+ "scaling": "every matrix (training and test) is standardised with scaler_mean / scaler_scale, the StandardScaler fitted on the training matrix; this is the scaling of the manuscript's evaluation",
  "sarus": "--skipn --show-non-matching --output-scoring-mode score besthit",
  "sequence_length": 300
 }

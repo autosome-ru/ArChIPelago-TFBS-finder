@@ -1,0 +1,76 @@
+{
+ "tf": "GATA2",
+ "pwm_set": "di",
+ "training_species": "mouse",
+ "pwm_species": "MOUSE",
+ "model": "RandomForestClassifier(max_depth=6, max_samples=0.8, n_estimators=100, random_state=0), scikit-learn 1.3",
+ "features": [
+  "di_0",
+  "di_1",
+  "di_2",
+  "di_3",
+  "di_4",
+  "di_5",
+  "di_6",
+  "di_7",
+  "di_8",
+  "di_9",
+  "di_10",
+  "di_11"
+ ],
+ "pwm_files": "mono_<k> = PWMs_MOUSE_mono/<TF>/<k>.pwm, di_<k> = PWMs_MOUSE_di/<TF>/<k>.dpwm",
+ "scaler_mean": [
+  10.208308741784599,
+  8.025171744840808,
+  6.394888846916189,
+  9.387001846796407,
+  8.259443961232995,
+  9.380762590955511,
+  8.534724089210334,
+  8.956195939613425,
+  8.869023078072825,
+  7.915132909736529,
+  7.613995583754849,
+  9.698956091103428
+ ],
+ "scaler_scale": [
+  3.5071495680066502,
+  4.766019183740814,
+  5.486713613632989,
+  3.7610723869063465,
+  4.625150765255648,
+  3.9112264537304933,
+  4.432506009335048,
+  4.170158807045925,
+  4.218526581569396,
+  4.837101725069702,
+  5.157029524544283,
+  3.6743813011084083
+ ],
+ "training_set": {
+  "species": "mouse",
+  "chromosomes": "chr2-7, 9-18",
+  "negatives": "v3",
+  "n_positives": 5453,
+  "n_negatives": 146227
+ },
+ "test_set_same_species": {
+  "species": "mouse",
+  "chromosomes": "chr1, 8, 19",
+  "n_positives": 1045,
+  "n_negatives": 35402,
+  "auROC": 0.8926,
+  "auPRC": 0.2812
+ },
+ "test_set_other_species": {
+  "species": "human",
+  "chromosomes": "chr1, 8, 21",
+  "n_positives": 1307,
+  "n_negatives": 41052,
+  "auROC": 0.8999,
+  "auPRC": 0.2413
+ },
+ "scaling": "every matrix (training and test) is standardised with scaler_mean / scaler_scale, the StandardScaler fitted on the training matrix; this is the scaling of the manuscript's evaluation",
+ "sarus": "--skipn --show-non-matching --output-scoring-mode score besthit",
+ "sequence_length": 300
+}

@@ -85,6 +85,22 @@ def real_di_pwm_dir(project_root):
 
 
 @pytest.fixture
+def real_mouse_mono_pwm_dir(project_root):
+    d = project_root / "PWMs_mono_MOUSE"
+    if not d.exists():
+        pytest.skip("PWMs_mono_MOUSE directory not found")
+    return d
+
+
+@pytest.fixture
+def real_mouse_di_pwm_dir(project_root):
+    d = project_root / "PWMs_di_MOUSE"
+    if not d.exists():
+        pytest.skip("PWMs_di_MOUSE directory not found")
+    return d
+
+
+@pytest.fixture
 def real_models_dir(project_root):
     d = project_root / "Models"
     if not d.exists():
@@ -193,6 +209,51 @@ class TestRealModelFiles:
             for pwm_type, n in (("mono", n_mono), ("di", n_di), ("mono_di", n_mono + n_di)):
                 model, spec = load_model(real_models_dir, tf, pwm_type)
                 assert len(set(spec["features"])) == model.n_features_in_ == n, (tf, pwm_type)
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(not IMPORTS_AVAILABLE, reason="Required imports not available")
+class TestRealMouseModelFiles:
+    """Mouse-trained models and mouse PWMs."""
+
+    def test_p53_absent(self, real_models_dir, real_mono_pwm_dir,
+                        real_mouse_mono_pwm_dir):
+        assert not (real_models_dir / "P53").exists()
+        assert not (real_mono_pwm_dir / "P53").exists()
+        assert not (real_mouse_mono_pwm_dir / "P53").exists()
+
+    def test_mouse_pwm_tfs_match_available(self, real_mouse_mono_pwm_dir,
+                                           real_mouse_di_pwm_dir):
+        for d in (real_mouse_mono_pwm_dir, real_mouse_di_pwm_dir):
+            assert sorted(x.name for x in d.iterdir() if x.is_dir()) == sorted(AVAILABLE_TFS)
+
+    def test_every_tf_has_three_mouse_models(self, real_models_dir):
+        for tf in AVAILABLE_TFS:
+            found = get_available_models(real_models_dir, tf, "mouse")
+            assert sorted(found) == sorted(PWM_TYPES), tf
+
+    def test_every_mouse_model_matches_its_pwms(
+            self, real_models_dir, real_mouse_mono_pwm_dir, real_mouse_di_pwm_dir):
+        """Each mouse model uses every mouse PWM of its type(s) of the TF, once."""
+        for tf in AVAILABLE_TFS:
+            n_mono = len(list((real_mouse_mono_pwm_dir / tf).glob("*.pwm")))
+            n_di = len(list((real_mouse_di_pwm_dir / tf).glob("*.dpwm")))
+            for pwm_type, n in (("mono", n_mono), ("di", n_di), ("mono_di", n_mono + n_di)):
+                model, spec = load_model(real_models_dir, tf, pwm_type, "mouse")
+                assert len(set(spec["features"])) == model.n_features_in_ == n, (tf, pwm_type)
+                model_pwm_files(spec, real_mouse_mono_pwm_dir, real_mouse_di_pwm_dir, tf)
+
+    def test_mouse_model_against_human_pwms_fails(
+            self, real_models_dir, real_mono_pwm_dir, real_di_pwm_dir):
+        """A mouse model resolves its features only in the mouse PWM folders."""
+        failed = 0
+        for tf in AVAILABLE_TFS:
+            _, spec = load_model(real_models_dir, tf, "mono_di", "mouse")
+            try:
+                model_pwm_files(spec, real_mono_pwm_dir, real_di_pwm_dir, tf)
+            except FileNotFoundError:
+                failed += 1
+        assert failed > 0
 
 
 # FASTA Processing with Real Data
@@ -319,6 +380,23 @@ class TestPipelineIntegration:
         df.to_csv(p, sep="\t", index=False, float_format="%.6g")
         back = pd.read_csv(p, sep="\t")
         pd.testing.assert_frame_equal(df, back)
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(not IMPORTS_AVAILABLE, reason="Required imports not available")
+class TestSpeciesScan:
+    """End-to-end scan of the demo FASTA, without null calibration."""
+
+    @pytest.mark.parametrize("species,prefix", [("human", "CTCF"), ("mouse", "CTCF_MOUSE")])
+    def test_ctcf_scan(self, species, prefix, real_fasta_file, sarus_jar, tmp_path):
+        rc = main(["-f", str(real_fasta_file), "--tf", "CTCF", "--no-null",
+                   "--species", species, "--sarus_jar", str(sarus_jar),
+                   "-o", str(tmp_path)])
+        assert rc == 0
+        full = pd.read_csv(tmp_path / f"{prefix}_predictions_full.tsv", sep="\t")
+        n = sum(len(s) >= 300 for _, s in parse_fasta(real_fasta_file))
+        assert len(full) >= n > 0
+        assert full["predicted_probability"].between(0, 1).all()
 
 
 # Null Calibration with Realistic Sequences
@@ -454,8 +532,9 @@ class TestCLIIntegration:
         rc = main(["--list_tfs"])
         assert rc == 0
         out = capsys.readouterr().out
-        for tf in ["CTCF", "P53", "MYC"]:
+        for tf in ["CTCF", "MYC"]:
             assert tf in out
+        assert "P53" not in out
 
     def test_list_models_via_main(self, real_models_dir, capsys):
         rc = main(["--list_models", "--tf", "CTCF",

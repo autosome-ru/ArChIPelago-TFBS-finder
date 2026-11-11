@@ -1,6 +1,8 @@
 {
  "tf": "IRF1",
  "pwm_set": "mono",
+ "training_species": "human",
+ "pwm_species": "HUMAN",
  "model": "RandomForestClassifier(max_depth=6, max_samples=0.8, n_estimators=100, random_state=0), scikit-learn 1.3",
  "features": [
   "mono_0",
@@ -15,45 +17,57 @@
   "mono_9",
   "mono_10"
  ],
+ "pwm_files": "mono_<k> = PWMs_mono_HUMAN/<TF>/<k>.pwm, di_<k> = PWMs_di_HUMAN/<TF>/<k>.dpwm",
  "scaler_mean": [
-  4.929479759165235,
-  4.645814712852313,
-  5.617808846322879,
-  5.607417872915683,
-  3.871999188200896,
-  3.4060421646768835,
-  5.034034663123686,
-  5.039825042244819,
-  4.548041777340215,
-  4.5511651266442,
-  6.423130910252355
+  4.822127215378963,
+  4.520911268033926,
+  5.566287644989985,
+  5.550906721506111,
+  3.732865866913408,
+  3.240889100132214,
+  4.9261124026201975,
+  4.929350155115349,
+  4.405444167109137,
+  4.4142771113005015,
+  6.375240537473742
  ],
  "scaler_scale": [
-  2.6747620034470456,
-  2.9265716527707784,
-  2.1886321805654547,
-  2.2615824202970627,
-  3.281109294701257,
-  3.560666814880213,
-  2.787497914775419,
-  2.8559170406882695,
-  3.098798000984833,
-  3.1452289889263665,
-  1.9422668626412638
+  2.6702756173437843,
+  2.9244103025606405,
+  2.173565449501736,
+  2.2442158512823664,
+  3.2822565718917645,
+  3.5624858220518663,
+  2.7850599498408672,
+  2.856199111341196,
+  3.0977820347219702,
+  3.1446676603940036,
+  1.952112575743387
  ],
  "training_set": {
   "species": "human",
-  "chromosomes": "chr2-7, 9, 10, 13-20",
-  "n_positives": 3280,
-  "n_negatives": 208371
+  "chromosomes": "chr2-7, 9-20, 22",
+  "negatives": "v3",
+  "n_positives": 2638,
+  "n_negatives": 153430
  },
- "human_test_set": {
+ "test_set_same_species": {
+  "species": "human",
   "chromosomes": "chr1, 8, 21",
-  "n_positives": 765,
-  "n_negatives": 60114,
-  "auROC": 0.8417,
-  "auPRC": 0.4425
+  "n_positives": 505,
+  "n_negatives": 35374,
+  "auROC": 0.8643,
+  "auPRC": 0.5683
  },
+ "test_set_other_species": {
+  "species": "mouse",
+  "chromosomes": "chr1, 8, 19",
+  "n_positives": 581,
+  "n_negatives": 33481,
+  "auROC": 0.6896,
+  "auPRC": 0.1635
+ },
+ "scaling": "every matrix (training and test) is standardised with scaler_mean / scaler_scale, the StandardScaler fitted on the training matrix; this is the scaling of the manuscript's evaluation",
  "sarus": "--skipn --show-non-matching --output-scoring-mode score besthit",
  "sequence_length": 300
 }

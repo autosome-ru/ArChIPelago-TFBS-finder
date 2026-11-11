@@ -1,6 +1,8 @@
 {
  "tf": "RXRA",
  "pwm_set": "di",
+ "training_species": "human",
+ "pwm_species": "HUMAN",
  "model": "RandomForestClassifier(max_depth=6, max_samples=0.8, n_estimators=100, random_state=0), scikit-learn 1.3",
  "features": [
   "di_0",
@@ -8,31 +10,43 @@
   "di_2",
   "di_3"
  ],
+ "pwm_files": "mono_<k> = PWMs_mono_HUMAN/<TF>/<k>.pwm, di_<k> = PWMs_di_HUMAN/<TF>/<k>.dpwm",
  "scaler_mean": [
-  10.92181579112572,
-  11.24486047798738,
-  10.933776037276612,
-  10.709136830159755
+  10.858379184845173,
+  11.1572850658472,
+  10.930783362399874,
+  10.7420106460273
  ],
  "scaler_scale": [
-  3.438013084251484,
-  3.4734586094245987,
-  3.5500988386674193,
-  3.710297639661476
+  3.4187076450002922,
+  3.453779943166872,
+  3.5273646567994916,
+  3.6958965848858543
  ],
  "training_set": {
   "species": "human",
-  "chromosomes": "chr2-7, 9, 10, 13-20",
-  "n_positives": 3918,
-  "n_negatives": 187701
+  "chromosomes": "chr2-7, 9-20, 22",
+  "negatives": "v3",
+  "n_positives": 3030,
+  "n_negatives": 134697
  },
- "human_test_set": {
+ "test_set_same_species": {
+  "species": "human",
   "chromosomes": "chr1, 8, 21",
-  "n_positives": 786,
-  "n_negatives": 60127,
-  "auROC": 0.8007,
-  "auPRC": 0.0877
+  "n_positives": 532,
+  "n_negatives": 34929,
+  "auROC": 0.8001,
+  "auPRC": 0.1084
  },
+ "test_set_other_species": {
+  "species": "mouse",
+  "chromosomes": "chr1, 8, 19",
+  "n_positives": 1429,
+  "n_negatives": 31531,
+  "auROC": 0.775,
+  "auPRC": 0.1488
+ },
+ "scaling": "every matrix (training and test) is standardised with scaler_mean / scaler_scale, the StandardScaler fitted on the training matrix; this is the scaling of the manuscript's evaluation",
  "sarus": "--skipn --show-non-matching --output-scoring-mode score besthit",
  "sequence_length": 300
 }

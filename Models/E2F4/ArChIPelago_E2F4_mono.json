@@ -1,6 +1,8 @@
 {
  "tf": "E2F4",
  "pwm_set": "mono",
+ "training_species": "human",
+ "pwm_species": "HUMAN",
  "model": "RandomForestClassifier(max_depth=6, max_samples=0.8, n_estimators=100, random_state=0), scikit-learn 1.3",
  "features": [
   "mono_0",
@@ -11,37 +13,49 @@
   "mono_5",
   "mono_6"
  ],
+ "pwm_files": "mono_<k> = PWMs_mono_HUMAN/<TF>/<k>.pwm, di_<k> = PWMs_di_HUMAN/<TF>/<k>.dpwm",
  "scaler_mean": [
-  5.928070989882867,
-  6.162027171397245,
-  5.254734400724925,
-  5.375327877369352,
-  6.073165180345942,
-  4.754070341955054,
-  4.457572792190682
+  6.011428148207448,
+  6.245800674110291,
+  5.3365513822944655,
+  5.455204766295173,
+  6.201428605055231,
+  4.7773532796469285,
+  4.451175163897196
  ],
  "scaler_scale": [
-  1.963340389887082,
-  1.9827568014132264,
-  2.1495534195206347,
-  2.1218128142720176,
-  2.276225910326881,
-  1.5085803776129967,
-  1.3895469325577965
+  1.915622865131455,
+  1.935885458060859,
+  2.0892844767329786,
+  2.0629544381004035,
+  2.2139300434932547,
+  1.464340510896933,
+  1.3507739960264562
  ],
  "training_set": {
   "species": "human",
-  "chromosomes": "chr2-7, 9, 10, 13-20",
-  "n_positives": 2686,
-  "n_negatives": 118552
+  "chromosomes": "chr2-7, 9-20, 22",
+  "negatives": "v3",
+  "n_positives": 1600,
+  "n_negatives": 84771
  },
- "human_test_set": {
+ "test_set_same_species": {
+  "species": "human",
   "chromosomes": "chr1, 8, 21",
-  "n_positives": 594,
-  "n_negatives": 40296,
-  "auROC": 0.8309,
-  "auPRC": 0.1439
+  "n_positives": 297,
+  "n_negatives": 21073,
+  "auROC": 0.8388,
+  "auPRC": 0.1933
  },
+ "test_set_other_species": {
+  "species": "mouse",
+  "chromosomes": "chr1, 8, 19",
+  "n_positives": 475,
+  "n_negatives": 17810,
+  "auROC": 0.878,
+  "auPRC": 0.2497
+ },
+ "scaling": "every matrix (training and test) is standardised with scaler_mean / scaler_scale, the StandardScaler fitted on the training matrix; this is the scaling of the manuscript's evaluation",
  "sarus": "--skipn --show-non-matching --output-scoring-mode score besthit",
  "sequence_length": 300
 }

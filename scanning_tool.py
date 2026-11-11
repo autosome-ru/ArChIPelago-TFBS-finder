@@ -54,10 +54,12 @@ from sklearn.exceptions import InconsistentVersionWarning
 AVAILABLE_TFS = [
     'ANDR', 'AP2A', 'CEBPB', 'COE1', 'CTCF', 'E2F4', 'ERG', 'ESR1',
     'FLI1', 'GATA1', 'GATA2', 'GATA3', 'GCR', 'HNF4A', 'IRF1', 'IRF4',
-    'JUND', 'MAFK', 'MAX', 'MYC', 'P53', 'PPARG', 'PRGR', 'REST',
+    'JUND', 'MAFK', 'MAX', 'MYC', 'PPARG', 'PRGR', 'REST',
     'RUNX1', 'RXRA', 'SOX2', 'SPI1', 'SRF', 'STA5A', 'STAT1', 'STAT3',
     'TAL1', 'TF65', 'TFE2', 'USF2',
 ]
+
+SPECIES = ['human', 'mouse']
 
 AMBIGUOUS_NUCLEOTIDES = set('BDHKMSVWYNR')
 
@@ -96,6 +98,7 @@ class ScanConfig:
     n_null_shuffles: int = 50
     prob_threshold: float = 0.7
     skip_null: bool = False
+    species: str = 'human'
 
 
 @dataclass
@@ -160,29 +163,35 @@ def reverse_complement(seq: str) -> str:
 
 # Models, PWMs and SARUS
 
-def find_model_file(models_dir: Path, tf_name: str,
-                    pwm_type: str) -> Optional[Path]:
-    """Model file <models_dir>/<TF>/ArChIPelago_<TF>_<pwm_type>.sav, or None."""
-    if pwm_type not in PWM_TYPES:
+def find_model_file(models_dir: Path, tf_name: str, pwm_type: str,
+                    species: str = 'human') -> Optional[Path]:
+    """
+    Model file <models_dir>/<TF>/ArChIPelago_<TF>_<pwm_type>.sav (human) or
+    ArChIPelago_<TF>_MOUSE_<pwm_type>.sav (mouse), or None.
+    """
+    if pwm_type not in PWM_TYPES or species not in SPECIES:
         return None
-    p = Path(models_dir) / tf_name / f"ArChIPelago_{tf_name}_{pwm_type}.sav"
+    infix = '_MOUSE' if species == 'mouse' else ''
+    p = (Path(models_dir) / tf_name
+         / f"ArChIPelago_{tf_name}{infix}_{pwm_type}.sav")
     return p if p.exists() else None
 
 
-def load_model(models_dir: Path, tf_name: str, pwm_type: str):
+def load_model(models_dir: Path, tf_name: str, pwm_type: str,
+               species: str = 'human'):
     """
     Load the Random Forest of a TF and its feature specification (the .json
     next to the .sav): 'features' = the PWM features in the order the model was
-    fitted with ('mono_<k>' = PWMs_mono_HUMAN/<TF>/<k>.pwm, 'di_<k>' =
-    PWMs_di_HUMAN/<TF>/<k>.dpwm), 'scaler_mean' / 'scaler_scale' = mean and
-    standard deviation of each feature on the human training set.
+    fitted with ('mono_<k>' = PWMs_mono_<SPECIES>/<TF>/<k>.pwm, 'di_<k>' =
+    PWMs_di_<SPECIES>/<TF>/<k>.dpwm), 'scaler_mean' / 'scaler_scale' = mean and
+    standard deviation of each feature on the training set of the species.
 
     Returns (model, spec).
     """
-    path = find_model_file(models_dir, tf_name, pwm_type)
+    path = find_model_file(models_dir, tf_name, pwm_type, species)
     if path is None:
         raise FileNotFoundError(
-            f"No {pwm_type} model for {tf_name} in {models_dir}")
+            f"No {species} {pwm_type} model for {tf_name} in {models_dir}")
     with open(path.with_suffix('.json')) as fh:
         spec = json.load(fh)
     with warnings.catch_warnings(record=True) as caught:
@@ -207,11 +216,12 @@ def load_model(models_dir: Path, tf_name: str, pwm_type: str):
     return model, spec
 
 
-def get_available_models(models_dir: Path, tf_name: str) -> Dict[str, Path]:
+def get_available_models(models_dir: Path, tf_name: str,
+                         species: str = 'human') -> Dict[str, Path]:
     """Model files of a TF by PWM type."""
     models = {}
     for pwm_type in PWM_TYPES:
-        p = find_model_file(models_dir, tf_name, pwm_type)
+        p = find_model_file(models_dir, tf_name, pwm_type, species)
         if p is not None:
             models[pwm_type] = p
     return models
@@ -367,7 +377,8 @@ def scan_sequence(config: ScanConfig, verbose=True,
         logger.warning("No valid windows generated from input sequences.")
         return None
 
-    model, spec = load_model(config.models_dir, config.tf_name, config.pwm_type)
+    model, spec = load_model(config.models_dir, config.tf_name, config.pwm_type,
+                             config.species)
     pwm_files = model_pwm_files(spec, config.pwm_mono_dir, config.pwm_di_dir,
                                 config.tf_name)
     feat_cols = spec['features']
@@ -543,7 +554,9 @@ def export_results(preds: pd.DataFrame, config: ScanConfig,
     extra_cols = ['empirical_pvalue', 'qvalue']
     export_cols = base_cols + [c for c in extra_cols if c in preds.columns]
 
-    out_full = output_dir / f"{config.tf_name}_predictions_full.tsv"
+    name = config.tf_name + ('_MOUSE' if config.species == 'mouse' else '')
+
+    out_full = output_dir / f"{name}_predictions_full.tsv"
     preds[export_cols].to_csv(out_full, sep='\t', index=False,
                               float_format='%.6g')
     logger.info(f"Full predictions: {out_full}  ({len(preds)} windows)")
@@ -560,13 +573,13 @@ def export_results(preds: pd.DataFrame, config: ScanConfig,
         ].sort_values('predicted_probability', ascending=False)
         tag = f"prob{config.prob_threshold}"
 
-    out_sig = output_dir / f"{config.tf_name}_significant_{tag}.tsv"
+    out_sig = output_dir / f"{name}_significant_{tag}.tsv"
     sig[export_cols].to_csv(out_sig, sep='\t', index=False,
                             float_format='%.6g')
     logger.info(f"Significant hits: {out_sig}  ({len(sig)} windows)")
     outputs['significant'] = out_sig
 
-    out_bed = output_dir / f"{config.tf_name}_significant.bed"
+    out_bed = output_dir / f"{name}_significant.bed"
     with open(out_bed, 'w') as f:
         for _, row in sig.iterrows():
             seq_id = row['window_id'].rsplit('@', 1)[0]  # sequence ids may themselves contain '@' (ENCODE)
@@ -628,6 +641,7 @@ def parse_arguments(argv=None) -> argparse.Namespace:
         epilog="""
 Examples:
   %(prog)s -f sequences.fasta --tf CTCF
+  %(prog)s -f sequences.fasta --tf CTCF --species mouse
   %(prog)s -f sequences.fasta --tf CTCF --fdr 0.05 --pwm_type mono_di
   %(prog)s -f sequences.fasta --tf CTCF --no-null --prob 0.7
   %(prog)s --list_tfs
@@ -643,6 +657,9 @@ Examples:
     parser.add_argument('-o', '--output', default=None,
                         help='Output directory (default: ./Results)')
 
+    parser.add_argument('--species', choices=SPECIES, default='human',
+                        help='Species of the training set and the PWMs '
+                             '(default: human)')
     parser.add_argument('--models_dir', default=None,
                         help='Models directory (default: Models/ next to the script)')
     parser.add_argument('--pwm_mono_dir', default=None,
@@ -679,7 +696,7 @@ Examples:
     return parser.parse_args(argv)
 
 
-def _resolve_default_paths(script_dir: Path) -> dict:
+def _resolve_default_paths(script_dir: Path, species: str = 'human') -> dict:
     """Default resource paths relative to the script."""
     candidates_models = [
         script_dir / 'Models',
@@ -695,8 +712,8 @@ def _resolve_default_paths(script_dir: Path) -> dict:
     defaults = {
         'models_dir': next(
             (p for p in candidates_models if p.exists()), candidates_models[0]),
-        'pwm_mono_dir': script_dir / 'PWMs_mono_HUMAN',
-        'pwm_di_dir': script_dir / 'PWMs_di_HUMAN',
+        'pwm_mono_dir': script_dir / f'PWMs_mono_{species.upper()}',
+        'pwm_di_dir': script_dir / f'PWMs_di_{species.upper()}',
         'sarus_jar': next(
             (p for p in candidates_sarus if p.exists()), candidates_sarus[0]),
         'output_dir': script_dir / 'Results',
@@ -710,7 +727,7 @@ def main(argv=None) -> int:
     logger = setup_logging(args.verbose)
 
     if args.list_tfs:
-        print("\nAvailable Transcription Factors (36 from HOCOMOCO v11):")
+        print(f"\nAvailable Transcription Factors ({len(AVAILABLE_TFS)} from HOCOMOCO v11):")
         print("-" * 52)
         for i, tf in enumerate(AVAILABLE_TFS):
             print(f"  {tf:10}", end='' if (i + 1) % 4 else '\n')
@@ -720,7 +737,7 @@ def main(argv=None) -> int:
         return 0
 
     script_dir = Path(__file__).resolve().parent
-    defaults = _resolve_default_paths(script_dir)
+    defaults = _resolve_default_paths(script_dir, args.species)
 
     models_dir = (Path(args.models_dir) if args.models_dir
                   else defaults['models_dir'])
@@ -729,7 +746,7 @@ def main(argv=None) -> int:
         if not args.tf_name:
             print("Error: --tf is required with --list_models")
             return 1
-        models = get_available_models(models_dir, args.tf_name)
+        models = get_available_models(models_dir, args.tf_name, args.species)
         if not models:
             print(f"No models found for {args.tf_name} in {models_dir}")
             return 1
@@ -764,6 +781,7 @@ def main(argv=None) -> int:
         n_null_shuffles=args.n_null,
         prob_threshold=args.prob,
         skip_null=args.skip_null,
+        species=args.species,
     )
 
     if not validate_paths(config, logger):

@@ -7,8 +7,9 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-lightgrey.svg)](scanning_tool.py)
 
 Command-line tool that scans DNA sequences for transcription factor binding sites with the pre-trained
-ArChIPelago Random Forest models: each model combines the scores of all human mono- and dinucleotide PWMs of a
-transcription factor (TF). Hits are called against an empirical null distribution built from
+ArChIPelago Random Forest models: each model combines the scores of all mono- and dinucleotide PWMs of a
+transcription factor (TF). Models trained on human data (human PWMs) and on mouse data (mouse PWMs) are
+available for 35 TFs; `--species` selects them. Hits are called against an empirical null distribution built from
 dinucleotide-shuffled sequences, with Benjamini-Hochberg FDR control.
 
 > Kravchenko P., Vorontsov I.E., Grosse I., Makeev V.J., Kulakovskiy I.V., and Penzar D.D. (2026).
@@ -37,21 +38,34 @@ dinucleotide-shuffled sequences, with Benjamini-Hochberg FDR control.
 
 ## Models
 
-Three models per TF, one for each PWM set: monoPWMs (`mono`), diPWMs (`di`) and monoPWMs + diPWMs
-(`mono_di`, the default).
+Six models per TF: for each species (human, mouse) three models, one for each PWM set: monoPWMs (`mono`), diPWMs
+(`di`) and monoPWMs + diPWMs (`mono_di`, the default). Human models use the human PWMs and are trained on human
+peaks; mouse models use the mouse PWMs and are trained on mouse peaks. The tool uses the human models unless
+`--species mouse` is given.
 
 | | |
 |---|---|
 | Algorithm | `RandomForestClassifier(max_depth=6, max_samples=0.8, n_estimators=100, random_state=0)`, scikit-learn 1.3 |
-| Training data | human ChIP-Seq peak regions of the TF (positives) and GC-matched peak regions of unrelated TF families (negatives), human training chromosomes 2-7, 9, 10, 13-20 |
+| Positives | per peak set the top 1,000 GTRD peaks (tags >= 10, ranked by -10log10 P), +-500 bp windows, repeat filter, at most 10,000 positives per TF and species, 300-bp sequences |
+| Negatives (v3) | peaks of TFs of other TFClass classes; windows overlapping the TF's own positives are removed; the rest are GC-matched to the positives with BiasAway |
+| Training chromosomes | human chr2-7, 9-20, 22; mouse chr2-7, 9-18 |
+| Test chromosomes | human chr1, 8, 21; mouse chr1, 8, 19 |
 | Features | best-hit log-odds score of every PWM of the TF in the 300-bp sequence (SPRY-SARUS), standardised with the mean and standard deviation of that feature on the training set |
-| Files | `Models/<TF>/ArChIPelago_<TF>_<mono\|di\|mono_di>.sav` (joblib) and `.json` (feature specification) |
+| Files | `Models/<TF>/ArChIPelago_<TF>_<mono\|di\|mono_di>.sav` (human) and `ArChIPelago_<TF>_MOUSE_<mono\|di\|mono_di>.sav` (mouse), joblib, each with a `.json` (feature specification) |
 
-The `.json` file lists the features in the order the model expects (`mono_<k>` = `PWMs_mono_HUMAN/<TF>/<k>.pwm`,
-`di_<k>` = `PWMs_di_HUMAN/<TF>/<k>.dpwm`), the training mean and standard deviation of each feature
-(`scaler_mean`, `scaler_scale`), the size of the training set and the auROC / auPRC of the model on the human test
-set (chromosomes 1, 8, 21). Over the 36 TFs the `mono_di` models reach a median auROC of 0.8915 and a median auPRC of
-0.3026 on the human test set (`mono`: 0.8796 / 0.2734; `di`: 0.8847 / 0.2911).
+The `.json` file lists the features in the order the model expects (`mono_<k>` = `PWMs_mono_<SPECIES>/<TF>/<k>.pwm`,
+`di_<k>` = `PWMs_di_<SPECIES>/<TF>/<k>.dpwm`, with `<SPECIES>` = `HUMAN` or `MOUSE`), the training mean and standard
+deviation of each feature (`scaler_mean`, `scaler_scale`), the sizes of the training and test sets and the auROC and
+auPRC of the model on the test chromosomes of its own species and of the other species. In the mouse `.json` files the
+`pwm_files` entry names the PWM folders `PWMs_MOUSE_mono` and `PWMs_MOUSE_di`; in this repository they are
+`PWMs_mono_MOUSE/` and `PWMs_di_MOUSE/`.
+
+Median test auROC / auPRC over the 35 TFs on the test chromosomes of the training species (from the `.json` files):
+
+| model | human `mono` | human `di` | human `mono_di` | mouse `mono` | mouse `di` | mouse `mono_di` |
+|---|---|---|---|---|---|---|
+| auROC | 0.8906 | 0.9021 | 0.9021 | 0.8948 | 0.8968 | 0.8973 |
+| auPRC | 0.3142 | 0.3251 | 0.3360 | 0.3274 | 0.3441 | 0.3563 |
 
 The tool stops with an error if a model, its `.json`, a PWM file of one of its features or a SARUS scan is missing.
 
@@ -62,9 +76,9 @@ The tool stops with an error if a model, its `.json`, a PWM file of one of its f
 ```
 ANDR   AP2A   CEBPB  COE1   CTCF   E2F4   ERG    ESR1
 FLI1   GATA1  GATA2  GATA3  GCR    HNF4A  IRF1   IRF4
-JUND   MAFK   MAX    MYC    P53    PPARG  PRGR   REST
-RUNX1  RXRA   SOX2   SPI1   SRF    STA5A  STAT1  STAT3
-TAL1   TF65   TFE2   USF2
+JUND   MAFK   MAX    MYC    PPARG  PRGR   REST   RUNX1
+RXRA   SOX2   SPI1   SRF    STA5A  STAT1  STAT3  TAL1
+TF65   TFE2   USF2
 ```
 
 `python scanning_tool.py --list_tfs` prints the list.
@@ -114,15 +128,18 @@ submodule when the tool is used inside the ArChIPelago repository), `sarus/relea
 
 ## Models and PWMs
 
-The models (`Models/`, 36 TFs x 3 models) and the human PWMs (`PWMs_mono_HUMAN/`, 1,495 monoPWMs;
-`PWMs_di_HUMAN/`, 780 diPWMs) are part of this repository; the same files are in the ArChIPelago Zenodo record
-([10.5281/zenodo.14927303](https://doi.org/10.5281/zenodo.14927303): `Models.tar.gz`, `PWMs_mono_HUMAN.tar.gz`,
-`PWMs_di_HUMAN.tar.gz`).
+The models (`Models/`, 35 TFs x 2 species x 3 models), the human PWMs (`PWMs_mono_HUMAN/`, 1,447 monoPWMs;
+`PWMs_di_HUMAN/`, 754 diPWMs) and the mouse PWMs (`PWMs_mono_MOUSE/`, 1,178 monoPWMs; `PWMs_di_MOUSE/`, 617 diPWMs)
+are part of this repository. The same files, with the training and test sets and the other data of the revision
+(R2), are in the ArChIPelago Zenodo record
+([10.5281/zenodo.14927303](https://doi.org/10.5281/zenodo.14927303), concept DOI of all versions): `Models.tar.gz`,
+`PWMs_mono_HUMAN.tar.gz`, `PWMs_di_HUMAN.tar.gz`, `PWMs_mono_MOUSE.tar.gz`, `PWMs_di_MOUSE.tar.gz`.
 
 Check the models of a TF:
 
 ```bash
 python scanning_tool.py --list_models --tf CTCF
+python scanning_tool.py --list_models --tf CTCF --species mouse
 ```
 
 ---
@@ -143,18 +160,24 @@ ArChIPelago-TFBS-finder/
 │   │   ├── ArChIPelago_CTCF_di.sav
 │   │   ├── ArChIPelago_CTCF_di.json
 │   │   ├── ArChIPelago_CTCF_mono_di.sav
-│   │   └── ArChIPelago_CTCF_mono_di.json
+│   │   ├── ArChIPelago_CTCF_mono_di.json
+│   │   ├── ArChIPelago_CTCF_MOUSE_mono.sav       # mouse-trained models
+│   │   ├── ArChIPelago_CTCF_MOUSE_mono.json
+│   │   └── ...                                    # MOUSE_di, MOUSE_mono_di
 │   └── .../
 │
-├── PWMs_mono_HUMAN/           # monoPWMs
+├── PWMs_mono_HUMAN/           # human monoPWMs
 │   ├── CTCF/
 │   │   └── <k>.pwm
 │   └── .../
 │
-├── PWMs_di_HUMAN/             # diPWMs
+├── PWMs_di_HUMAN/             # human diPWMs
 │   ├── CTCF/
 │   │   └── <k>.dpwm
 │   └── .../
+│
+├── PWMs_mono_MOUSE/           # mouse monoPWMs (same layout)
+├── PWMs_di_MOUSE/             # mouse diPWMs (same layout)
 │
 ├── sarus/
 │   └── releases/
@@ -181,13 +204,14 @@ python scanning_tool.py -f <FASTA> --tf <TF_NAME> [OPTIONS]
 | Argument | Description |
 |---|---|
 | `-f`, `--fasta` | input FASTA file |
-| `--tf` | TF name (e.g. `CTCF`), or `all` for all 36 TFs |
+| `--tf` | TF name (e.g. `CTCF`), or `all` for all 35 TFs |
 
 ### Optional arguments
 
 | Argument | Default | Description |
 |---|---|---|
 | `-o`, `--output` | `Results/` | output directory |
+| `--species` | `human` | species of the training set and the PWMs: `human` or `mouse` |
 | `--pwm_type` | `mono_di` | model: `mono`, `di` or `mono_di` |
 | `--frame` | `300` | window size in bp (the length of the training sequences) |
 | `--step` | `150` | window step in bp |
@@ -197,8 +221,8 @@ python scanning_tool.py -f <FASTA> --tf <TF_NAME> [OPTIONS]
 | `--no-null` | off | skip the null calibration (no p- and q-values) |
 | `-v`, `--verbose` | off | verbose logging |
 | `--models_dir` | `Models/` | models directory |
-| `--pwm_mono_dir` | `PWMs_mono_HUMAN/` | monoPWM directory |
-| `--pwm_di_dir` | `PWMs_di_HUMAN/` | diPWM directory |
+| `--pwm_mono_dir` | `PWMs_mono_HUMAN/` (`PWMs_mono_MOUSE/` with `--species mouse`) | monoPWM directory |
+| `--pwm_di_dir` | `PWMs_di_HUMAN/` (`PWMs_di_MOUSE/` with `--species mouse`) | diPWM directory |
 | `--sarus_jar` | see [SARUS jar](#4-sarus-jar) | SARUS jar file |
 
 Default directories are relative to `scanning_tool.py`.
@@ -222,6 +246,9 @@ Written to the directory given by `-o` (default `Results/`):
 | `<TF>_significant_FDR<fdr>.tsv` | windows with q-value <= `--fdr`, sorted by q-value |
 | `<TF>_significant_prob<prob>.tsv` | with `--no-null`: windows with probability >= `--prob`, sorted by probability |
 | `<TF>_significant.bed` | the significant windows as BED (sequence id, start, start + frame, `<TF>_hit`, 1000 x probability, `.`) |
+
+With `--species mouse` the file names read `<TF>_MOUSE_predictions_full.tsv`, `<TF>_MOUSE_significant_FDR<fdr>.tsv`,
+`<TF>_MOUSE_significant_prob<prob>.tsv` and `<TF>_MOUSE_significant.bed`.
 
 ### TSV columns
 
@@ -250,7 +277,10 @@ python scanning_tool.py -f synthetic_CTCF_demo.fasta --tf CTCF --no-null
 # monoPWM model, verbose
 python scanning_tool.py -f synthetic_CTCF_demo.fasta --tf CTCF --pwm_type mono -v
 
-# all 36 TFs
+# mouse-trained model with the mouse PWMs
+python scanning_tool.py -f synthetic_CTCF_demo.fasta --tf CTCF --species mouse
+
+# all 35 TFs
 python scanning_tool.py -f sequences.fasta --tf all -o Results/batch_scan/
 
 # other window size and step
@@ -265,8 +295,8 @@ python scanning_tool.py --list_models --tf CTCF
 
 ## Testing
 
-The test suite has 115 tests: 81 unit tests (`tests/test_scanning_tool.py`, no data needed) and 34 integration
-tests (`tests/test_integration.py`) that use `Models/`, `PWMs_mono_HUMAN/`, `PWMs_di_HUMAN/`, the SARUS jar and
+The test suite has 140 tests: 99 unit tests (`tests/test_scanning_tool.py`, no data needed) and 41 integration
+tests (`tests/test_integration.py`) that use `Models/`, the human and mouse PWM directories, the SARUS jar and
 the FASTA files of the repository; they need scikit-learn 1.3 to load the models.
 
 ```bash

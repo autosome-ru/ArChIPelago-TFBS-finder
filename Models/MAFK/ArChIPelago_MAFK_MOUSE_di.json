@@ -1,0 +1,49 @@
+{
+ "tf": "MAFK",
+ "pwm_set": "di",
+ "training_species": "mouse",
+ "pwm_species": "MOUSE",
+ "model": "RandomForestClassifier(max_depth=6, max_samples=0.8, n_estimators=100, random_state=0), scikit-learn 1.3",
+ "features": [
+  "di_0",
+  "di_1",
+  "di_2"
+ ],
+ "pwm_files": "mono_<k> = PWMs_MOUSE_mono/<TF>/<k>.pwm, di_<k> = PWMs_MOUSE_di/<TF>/<k>.dpwm",
+ "scaler_mean": [
+  8.740290738428977,
+  9.37517623840119,
+  7.4679775697283
+ ],
+ "scaler_scale": [
+  4.602191368961806,
+  4.396080418879316,
+  5.154258274577688
+ ],
+ "training_set": {
+  "species": "mouse",
+  "chromosomes": "chr2-7, 9-18",
+  "negatives": "v3",
+  "n_positives": 2296,
+  "n_negatives": 125654
+ },
+ "test_set_same_species": {
+  "species": "mouse",
+  "chromosomes": "chr1, 8, 19",
+  "n_positives": 433,
+  "n_negatives": 26663,
+  "auROC": 0.9497,
+  "auPRC": 0.7586
+ },
+ "test_set_other_species": {
+  "species": "human",
+  "chromosomes": "chr1, 8, 21",
+  "n_positives": 234,
+  "n_negatives": 20414,
+  "auROC": 0.8672,
+  "auPRC": 0.4743
+ },
+ "scaling": "every matrix (training and test) is standardised with scaler_mean / scaler_scale, the StandardScaler fitted on the training matrix; this is the scaling of the manuscript's evaluation",
+ "sarus": "--skipn --show-non-matching --output-scoring-mode score besthit",
+ "sequence_length": 300
+}
