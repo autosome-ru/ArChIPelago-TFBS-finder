@@ -20,6 +20,9 @@ Usage examples:
     # FDR 0.05, monoPWM + diPWM model
     python scanning_tool.py -f sequences.fasta --tf CTCF --fdr 0.05 --pwm_type mono_di
 
+    # mouse-trained model with the mouse PWMs
+    python scanning_tool.py -f sequences.fasta --tf CTCF --species mouse
+
     # supported TFs
     python scanning_tool.py --list_tfs
 
