@@ -2,76 +2,115 @@
 
 [![tests](https://github.com/autosome-ru/ArChIPelago-TFBS-finder/actions/workflows/tests.yml/badge.svg)](https://github.com/autosome-ru/ArChIPelago-TFBS-finder/actions/workflows/tests.yml)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.14927303.svg)](https://doi.org/10.5281/zenodo.14927303)
-[![python](https://img.shields.io/badge/python-3.8--3.12-blue.svg)](requirements.txt)
+[![python](https://img.shields.io/badge/python-3.10%20%7C%203.12-blue.svg)](.github/workflows/tests.yml)
 [![scikit-learn](https://img.shields.io/badge/scikit--learn-1.3-orange.svg)](requirements.txt)
 [![License: MIT](https://img.shields.io/badge/license-MIT-lightgrey.svg)](scanning_tool.py)
 
-Command-line tool that scans DNA sequences for transcription factor binding sites with the pre-trained
-ArChIPelago Random Forest models: each model combines the scores of all mono- and dinucleotide PWMs of a
-transcription factor (TF). Models trained on human data (human PWMs) and on mouse data (mouse PWMs) are
-available for 35 TFs; `--species` selects them. Hits are called against an empirical null distribution built from
-dinucleotide-shuffled sequences, with Benjamini-Hochberg FDR control.
-
-> Kravchenko P., Vorontsov I.E., Grosse I., Makeev V.J., Kulakovskiy I.V., and Penzar D.D. (2026).
-> *Classic machine learning on top of multiple position weight matrices improves genomic prediction of
-> transcription factor binding sites.* Pipeline and manuscript analyses:
-> [autosome-ru/ArChIPelago](https://github.com/autosome-ru/ArChIPelago).
-
----
+`scanning_tool.py` scans DNA sequences for binding sites of 35 transcription factors (TFs). It cuts each sequence
+into windows, scores every window with all mononucleotide and dinucleotide position weight matrices (monoPWMs and
+diPWMs) of the TF using SPRY-SARUS, and passes the scores to a pre-trained Random Forest model, which gives the
+probability of a binding site. The tool then compares these probabilities with those of windows from
+dinucleotide-shuffled copies of the input and reports the windows that pass a Benjamini-Hochberg false discovery rate
+(FDR) threshold. Models trained on human data and on mouse data are included; `--species` selects them.
 
 ## Contents
 
-1. [Models](#models)
-2. [Supported transcription factors](#supported-transcription-factors)
-3. [Installation](#installation)
-4. [Models and PWMs](#models-and-pwms)
-5. [Directory layout](#directory-layout)
-6. [Usage](#usage)
-7. [Output files](#output-files)
-8. [Examples](#examples)
-9. [Testing](#testing)
-10. [How it works](#how-it-works)
-11. [Citation](#citation)
-12. [License](#license)
+1. [Installation](#installation)
+2. [Models](#models)
+3. [PWMs](#pwms)
+4. [Directory layout](#directory-layout)
+5. [Usage](#usage)
+6. [Output files](#output-files)
+7. [Examples](#examples)
+8. [Testing](#testing)
+9. [How it works](#how-it-works)
+10. [Citation](#citation)
+11. [Licence](#licence)
 
----
+## Installation
+
+### 1. Clone with the SARUS submodule
+
+```bash
+git clone --recurse-submodules https://github.com/autosome-ru/ArChIPelago-TFBS-finder.git
+cd ArChIPelago-TFBS-finder
+```
+
+The `sarus` submodule is SPRY-SARUS ([autosome-ru/sarus](https://github.com/autosome-ru/sarus)) at tag v2.2.3 and
+provides `sarus/releases/sarus-2.2.3.jar`. In a clone made without `--recurse-submodules`, run
+`git submodule update --init --recursive`.
+
+### 2. Python packages
+
+```bash
+python3 -m venv archipelago-env
+source archipelago-env/bin/activate
+pip install -r requirements.txt
+```
+
+`requirements.txt` asks for numpy >= 1.19.0, pandas >= 1.2.0, scikit-learn >= 1.3.0 and < 1.4, joblib >= 1.0.0,
+biopython >= 1.79 and pytest >= 7.0.0. The models were saved with scikit-learn 1.3. With another minor version of
+scikit-learn the tool stops with an error when it loads a model, and with a version older than 1.3 it fails on import.
+The test workflow runs on Python 3.10 and 3.12 (`.github/workflows/tests.yml`).
+
+### 3. Java
+
+SPRY-SARUS is a Java program, so `java` must be on the `PATH` (check with `java -version`). The test workflow uses
+Java 17. Each SARUS call is started with `-Xmx2G`.
+
+### 4. SARUS jar
+
+Without `--sarus_jar`, the tool uses the first of these files that exists, with paths relative to the folder of
+`scanning_tool.py`:
+
+1. `../sarus/releases/sarus-2.2.3.jar`
+2. `sarus/releases/sarus-2.2.3.jar`
+3. `sarus/sarus-2.2.3.jar`
+4. `../sarus/releases/sarus-2.0.1.jar`
+5. `sarus/releases/sarus-2.0.1.jar`
+
+In a clone made as in step 1, this is `sarus/releases/sarus-2.2.3.jar`.
 
 ## Models
 
-Six models per TF: for each species (human, mouse) three models, one for each PWM set: monoPWMs (`mono`), diPWMs
-(`di`) and monoPWMs + diPWMs (`mono_di`, the default). Human models use the human PWMs and are trained on human
-peaks; mouse models use the mouse PWMs and are trained on mouse peaks. The tool uses the human models unless
-`--species mouse` is given.
+`Models/` holds 210 models: 35 TFs, two training species (human, mouse) and three feature sets per species.
 
-| | |
+| feature set | `--pwm_type` |
 |---|---|
-| Algorithm | `RandomForestClassifier(max_depth=6, max_samples=0.8, n_estimators=100, random_state=0)`, scikit-learn 1.3 |
-| Positives | per peak set the top 1,000 GTRD peaks (tags >= 10, ranked by -10log10 P), +-500 bp windows, repeat filter, at most 10,000 positives per TF and species, 300-bp sequences |
-| Negatives (v3) | peaks of TFs of other TFClass classes; windows overlapping the TF's own positives are removed; the rest are GC-matched to the positives with BiasAway |
-| Training chromosomes | human chr2-7, 9-20, 22; mouse chr2-7, 9-18 |
-| Test chromosomes | human chr1, 8, 21; mouse chr1, 8, 19 |
-| Features | best-hit log-odds score of every PWM of the TF in the 300-bp sequence (SPRY-SARUS), standardised with the mean and standard deviation of that feature on the training set |
-| Files | `Models/<TF>/ArChIPelago_<TF>_<mono\|di\|mono_di>.sav` (human) and `ArChIPelago_<TF>_MOUSE_<mono\|di\|mono_di>.sav` (mouse), joblib, each with a `.json` (feature specification) |
+| monoPWMs of the TF | `mono` |
+| diPWMs of the TF | `di` |
+| monoPWMs and diPWMs of the TF | `mono_di` (default) |
 
-The `.json` file lists the features in the order the model expects (`mono_<k>` = `PWMs_mono_<SPECIES>/<TF>/<k>.pwm`,
-`di_<k>` = `PWMs_di_<SPECIES>/<TF>/<k>.dpwm`, with `<SPECIES>` = `HUMAN` or `MOUSE`), the training mean and standard
-deviation of each feature (`scaler_mean`, `scaler_scale`), the sizes of the training and test sets and the auROC and
-auPRC of the model on the test chromosomes of its own species and of the other species. In the mouse `.json` files the
-`pwm_files` entry names the PWM folders `PWMs_MOUSE_mono` and `PWMs_MOUSE_di`; in this repository they are
-`PWMs_mono_MOUSE/` and `PWMs_di_MOUSE/`.
+Human models are trained on human data and use the human PWMs; mouse models are trained on mouse data and use the
+mouse PWMs. The tool uses the human models unless `--species mouse` is given. Each model is a scikit-learn
+`RandomForestClassifier(max_depth=6, max_samples=0.8, n_estimators=100, random_state=0)` saved with joblib, with a
+`.json` file of the same name next to it:
 
-Median test auROC / auPRC over the 35 TFs on the test chromosomes of the training species (from the `.json` files):
+```
+Models/<TF>/ArChIPelago_<TF>_<mono|di|mono_di>.sav          human
+Models/<TF>/ArChIPelago_<TF>_MOUSE_<mono|di|mono_di>.sav    mouse
+```
 
-| model | human `mono` | human `di` | human `mono_di` | mouse `mono` | mouse `di` | mouse `mono_di` |
+The `.json` file lists the features in the order the model expects (`mono_<k>` is
+`PWMs_mono_<SPECIES>/<TF>/<k>.pwm`, `di_<k>` is `PWMs_di_<SPECIES>/<TF>/<k>.dpwm`, `<SPECIES>` is `HUMAN` or
+`MOUSE`) and the training mean and standard deviation of each feature (`scaler_mean`, `scaler_scale`). It also gives
+the training and test chromosomes (human: training chr2-7, 9-20, 22, test chr1, 8, 21; mouse: training chr2-7, 9-18,
+test chr1, 8, 19), the sizes of the training and test sets, and the auROC and auPRC of the model on the test
+chromosomes of both species. In the mouse `.json` files the `pwm_files` entry names the folders `PWMs_MOUSE_mono` and
+`PWMs_MOUSE_di`; in this repository they are `PWMs_mono_MOUSE/` and `PWMs_di_MOUSE/`.
+
+Median auROC and auPRC of the 35 models of each kind on the test chromosomes of their training species (field
+`test_set_same_species` of the `.json` files):
+
+| | human `mono` | human `di` | human `mono_di` | mouse `mono` | mouse `di` | mouse `mono_di` |
 |---|---|---|---|---|---|---|
 | auROC | 0.8906 | 0.9021 | 0.9021 | 0.8948 | 0.8968 | 0.8973 |
 | auPRC | 0.3142 | 0.3251 | 0.3360 | 0.3274 | 0.3441 | 0.3563 |
 
-The tool stops with an error if a model, its `.json`, a PWM file of one of its features or a SARUS scan is missing.
+The tool stops with an error if a model, its `.json` file or the PWM file of one of its features is missing, or if a
+SARUS run fails.
 
----
-
-## Supported transcription factors
+### Transcription factors
 
 ```
 ANDR   AP2A   CEBPB  COE1   CTCF   E2F4   ERG    ESR1
@@ -81,223 +120,146 @@ RXRA   SOX2   SPI1   SRF    STA5A  STAT1  STAT3  TAL1
 TF65   TFE2   USF2
 ```
 
-`python scanning_tool.py --list_tfs` prints the list.
+`python scanning_tool.py --list_tfs` prints this list. `python scanning_tool.py --list_models --tf CTCF` prints the
+feature sets available for one TF (add `--species mouse` for the mouse models).
 
----
+## PWMs
 
-## Installation
+Four folders, each with one subfolder per TF (35 TFs):
 
-### 1. Clone the repository
+| folder | content | files |
+|---|---|---|
+| `PWMs_mono_HUMAN/` | human monoPWMs, `<TF>/<k>.pwm` | 1,447 |
+| `PWMs_di_HUMAN/` | human diPWMs, `<TF>/<k>.dpwm` | 754 |
+| `PWMs_mono_MOUSE/` | mouse monoPWMs, `<TF>/<k>.pwm` | 1,178 |
+| `PWMs_di_MOUSE/` | mouse diPWMs, `<TF>/<k>.dpwm` | 617 |
 
-```bash
-git clone --recurse-submodules https://github.com/autosome-ru/ArChIPelago-TFBS-finder.git
-cd ArChIPelago-TFBS-finder
-```
-
-`--recurse-submodules` also fetches SPRY-SARUS (`sarus/`, pinned at release 2.2.3). In a clone made without it,
-run `git submodule update --init --recursive`.
-
-### 2. Python environment
-
-Python 3.8-3.12 and scikit-learn 1.3 (the models were saved with 1.3.0; scikit-learn 1.4 and later cannot use them, and the tool stops with an error).
-
-```bash
-conda create -n archipelago python=3.8
-conda activate archipelago
-pip install -r requirements.txt
-```
-
-### 3. Java (for SPRY-SARUS)
-
-The PWM scores are computed with [SPRY-SARUS](https://github.com/autosome-ru/sarus), which needs Java 8 or later:
-
-```bash
-java -version
-# macOS:  brew install openjdk
-# Ubuntu: sudo apt install default-jre
-```
-
-### 4. SARUS jar
-
-The `sarus` submodule provides `sarus/releases/sarus-2.2.3.jar`. The tool uses the first jar it finds among `../sarus/releases/sarus-2.2.3.jar` (the `sarus`
-submodule when the tool is used inside the ArChIPelago repository), `sarus/releases/sarus-2.2.3.jar`,
-`sarus/sarus-2.2.3.jar`, `../sarus/releases/sarus-2.0.1.jar` and `sarus/releases/sarus-2.0.1.jar`;
-`--sarus_jar /path/to/sarus.jar` sets it explicitly.
-
----
-
-## Models and PWMs
-
-The models (`Models/`, 35 TFs x 2 species x 3 models), the human PWMs (`PWMs_mono_HUMAN/`, 1,447 monoPWMs;
-`PWMs_di_HUMAN/`, 754 diPWMs) and the mouse PWMs (`PWMs_mono_MOUSE/`, 1,178 monoPWMs; `PWMs_di_MOUSE/`, 617 diPWMs)
-are part of this repository. The same files, with the training and test sets and the other data of the revision
-(R2), are in the ArChIPelago Zenodo record
-([10.5281/zenodo.14927303](https://doi.org/10.5281/zenodo.14927303), concept DOI of all versions): `Models.tar.gz`,
-`PWMs_mono_HUMAN.tar.gz`, `PWMs_di_HUMAN.tar.gz`, `PWMs_mono_MOUSE.tar.gz`, `PWMs_di_MOUSE.tar.gz`.
-
-Check the models of a TF:
-
-```bash
-python scanning_tool.py --list_models --tf CTCF
-python scanning_tool.py --list_models --tf CTCF --species mouse
-```
-
----
+The models and PWMs are also archived on Zenodo, concept DOI
+[10.5281/zenodo.14927303](https://doi.org/10.5281/zenodo.14927303) (all versions).
 
 ## Directory layout
 
 ```
 ArChIPelago-TFBS-finder/
-├── scanning_tool.py           # command-line tool
+├── scanning_tool.py            command-line tool
 ├── requirements.txt
 ├── pytest.ini
-├── README.md
-│
-├── Models/                    # Random Forest models (.sav) and feature specifications (.json)
-│   ├── CTCF/
-│   │   ├── ArChIPelago_CTCF_mono.sav
-│   │   ├── ArChIPelago_CTCF_mono.json
-│   │   ├── ArChIPelago_CTCF_di.sav
-│   │   ├── ArChIPelago_CTCF_di.json
-│   │   ├── ArChIPelago_CTCF_mono_di.sav
-│   │   ├── ArChIPelago_CTCF_mono_di.json
-│   │   ├── ArChIPelago_CTCF_MOUSE_mono.sav       # mouse-trained models
-│   │   ├── ArChIPelago_CTCF_MOUSE_mono.json
-│   │   └── ...                                    # MOUSE_di, MOUSE_mono_di
-│   └── .../
-│
-├── PWMs_mono_HUMAN/           # human monoPWMs
-│   ├── CTCF/
-│   │   └── <k>.pwm
-│   └── .../
-│
-├── PWMs_di_HUMAN/             # human diPWMs
-│   ├── CTCF/
-│   │   └── <k>.dpwm
-│   └── .../
-│
-├── PWMs_mono_MOUSE/           # mouse monoPWMs (same layout)
-├── PWMs_di_MOUSE/             # mouse diPWMs (same layout)
-│
-├── sarus/
-│   └── releases/
-│       └── sarus-2.2.3.jar    # SPRY-SARUS (git submodule)
-│
-├── synthetic_CTCF_demo.fasta  # demo input
-├── realdata_CTCF_test.fasta   # CTCF test input
-│
-└── tests/
-    ├── test_scanning_tool.py
-    └── test_integration.py
+├── Models/<TF>/                Random Forest models (.sav) and feature specifications (.json)
+├── PWMs_mono_HUMAN/<TF>/       human monoPWMs (.pwm)
+├── PWMs_di_HUMAN/<TF>/         human diPWMs (.dpwm)
+├── PWMs_mono_MOUSE/<TF>/       mouse monoPWMs (.pwm)
+├── PWMs_di_MOUSE/<TF>/         mouse diPWMs (.dpwm)
+├── sarus/                      SPRY-SARUS (git submodule)
+├── synthetic_CTCF_demo.fasta   demo input, one sequence of 10,000 bp
+├── realdata_CTCF_test.fasta    demo input, one sequence of 12,020 bp
+├── tests/
+│   ├── test_scanning_tool.py   unit tests
+│   └── test_integration.py     integration tests
+└── .github/workflows/tests.yml
 ```
-
----
 
 ## Usage
 
 ```
-python scanning_tool.py -f <FASTA> --tf <TF_NAME> [OPTIONS]
+python scanning_tool.py -f <FASTA> --tf <TF> [options]
 ```
 
-### Required arguments
+### Required
 
-| Argument | Description |
+| option | meaning |
 |---|---|
 | `-f`, `--fasta` | input FASTA file |
-| `--tf` | TF name (e.g. `CTCF`), or `all` for all 35 TFs |
+| `--tf`, `--tf_name` | TF name as in the list above (e.g. `CTCF`), or `all` for all 35 TFs one after another |
 
-### Optional arguments
+### Optional
 
-| Argument | Default | Description |
+| option | default | meaning |
 |---|---|---|
 | `-o`, `--output` | `Results/` | output directory |
-| `--species` | `human` | species of the training set and the PWMs: `human` or `mouse` |
-| `--pwm_type` | `mono_di` | model: `mono`, `di` or `mono_di` |
-| `--frame` | `300` | window size in bp (the length of the training sequences) |
+| `--species` | `human` | `human` or `mouse`: species of the model and of the default PWM folders |
+| `--pwm_type` | `mono_di` | feature set of the model: `mono`, `di` or `mono_di` |
+| `--frame` | `300` | window length in bp (300 bp is the length of the training sequences) |
 | `--step` | `150` | window step in bp |
-| `--fdr` | `0.1` | FDR threshold for significant windows |
-| `--prob` | `0.7` | probability threshold, used with `--no-null` |
-| `--n_null` | `50` | number of dinucleotide-shuffled sequences for the null distribution |
-| `--no-null` | off | skip the null calibration (no p- and q-values) |
-| `-v`, `--verbose` | off | verbose logging |
-| `--models_dir` | `Models/` | models directory |
-| `--pwm_mono_dir` | `PWMs_mono_HUMAN/` (`PWMs_mono_MOUSE/` with `--species mouse`) | monoPWM directory |
-| `--pwm_di_dir` | `PWMs_di_HUMAN/` (`PWMs_di_MOUSE/` with `--species mouse`) | diPWM directory |
+| `--fdr` | `0.1` | q-value threshold for significant windows |
+| `--prob` | `0.7` | probability threshold for significant windows, used with `--no-null` |
+| `--n_null` | `50` | number of dinucleotide-shuffled copies for the null distribution |
+| `--no-null` | off | skip the null distribution (no p-values or q-values) |
+| `--models_dir` | `Models/` | models folder |
+| `--pwm_mono_dir` | `PWMs_mono_HUMAN/`, or `PWMs_mono_MOUSE/` with `--species mouse` | monoPWM folder |
+| `--pwm_di_dir` | `PWMs_di_HUMAN/`, or `PWMs_di_MOUSE/` with `--species mouse` | diPWM folder |
 | `--sarus_jar` | see [SARUS jar](#4-sarus-jar) | SARUS jar file |
+| `-v`, `--verbose` | off | debug logging |
 
-Default directories are relative to `scanning_tool.py`.
+Default folders, including `Results/`, are relative to the folder of `scanning_tool.py`, not to the working directory.
 
 ### Information only
 
-| Argument | Description |
+| option | meaning |
 |---|---|
-| `--list_tfs` | print the supported TFs and exit |
-| `--list_models` | print the models available for `--tf` and exit |
+| `--list_tfs` | print the 35 TFs and exit |
+| `--list_models` | print the feature sets available for `--tf` (and `--species`) and exit |
 
----
+`python scanning_tool.py --help` prints all options.
 
 ## Output files
 
-Written to the directory given by `-o` (default `Results/`):
+Files written to the output directory (`<TF>` becomes `<TF>_MOUSE` with `--species mouse`):
 
-| File | Content |
+| file | content |
 |---|---|
-| `<TF>_predictions_full.tsv` | every window with its probability (and p- and q-value with the null calibration) |
-| `<TF>_significant_FDR<fdr>.tsv` | windows with q-value <= `--fdr`, sorted by q-value |
-| `<TF>_significant_prob<prob>.tsv` | with `--no-null`: windows with probability >= `--prob`, sorted by probability |
-| `<TF>_significant.bed` | the significant windows as BED (sequence id, start, start + frame, `<TF>_hit`, 1000 x probability, `.`) |
+| `<TF>_predictions_full.tsv` | all windows |
+| `<TF>_significant_FDR<fdr>.tsv` | windows with q-value <= `--fdr`, sorted by q-value (null distribution used) |
+| `<TF>_significant_prob<prob>.tsv` | windows with probability >= `--prob`, sorted by probability (with `--no-null`) |
+| `<TF>_significant.bed` | the significant windows in BED format |
 
-With `--species mouse` the file names read `<TF>_MOUSE_predictions_full.tsv`, `<TF>_MOUSE_significant_FDR<fdr>.tsv`,
-`<TF>_MOUSE_significant_prob<prob>.tsv` and `<TF>_MOUSE_significant.bed`.
+`<fdr>` and `<prob>` are the threshold values as Python prints them, for example `CTCF_significant_FDR0.1.tsv`. If
+the null distribution yields no windows, the tool logs a warning and selects windows by `--prob` instead.
 
-### TSV columns
+Columns of the TSV files:
 
-| Column | Content |
+| column | content |
 |---|---|
-| `window_id` | `<sequence_id>@<window index>` (index 0, 1, 2, ... along the sequence) |
+| `window_id` | `<sequence id>@<index>`; the index counts the scanned windows of the sequence (0, 1, 2, ...) |
 | `position` | 0-based start of the window in the sequence |
 | `predicted_probability` | Random Forest probability of a binding site in the window |
-| `empirical_pvalue` | p-value against the null distribution: (number of null probabilities >= observed + 1) / (null size + 1) |
-| `qvalue` | Benjamini-Hochberg q-value |
+| `empirical_pvalue` | (number of null probabilities >= the observed one + 1) / (number of null windows + 1); not written with `--no-null` |
+| `qvalue` | Benjamini-Hochberg q-value; not written with `--no-null` |
 
----
+The BED file has six columns: sequence id, window start, window start + `--frame`, `<TF>_hit` (without `_MOUSE`), the
+probability x 1000 truncated to an integer, and `.`. A short summary (number of windows, probability mean, median and
+maximum, null pool size and its 95th percentile, number of significant windows) is printed to standard output.
 
 ## Examples
 
+Run from the repository folder:
+
 ```bash
-# CTCF on the demo sequence
+# CTCF, human model, null distribution with 50 shuffles, FDR 0.1
 python scanning_tool.py -f synthetic_CTCF_demo.fasta --tf CTCF
 
-# stricter FDR
-python scanning_tool.py -f realdata_CTCF_test.fasta --tf CTCF --fdr 0.05
+# FDR 0.05, output in another folder
+python scanning_tool.py -f realdata_CTCF_test.fasta --tf CTCF --fdr 0.05 -o Results/realdata
 
-# without null calibration
+# no null distribution, probability threshold 0.7
 python scanning_tool.py -f synthetic_CTCF_demo.fasta --tf CTCF --no-null
 
-# monoPWM model, verbose
+# monoPWM model, debug logging
 python scanning_tool.py -f synthetic_CTCF_demo.fasta --tf CTCF --pwm_type mono -v
 
-# mouse-trained model with the mouse PWMs
+# mouse model with the mouse PWMs
 python scanning_tool.py -f synthetic_CTCF_demo.fasta --tf CTCF --species mouse
 
-# all 35 TFs
-python scanning_tool.py -f sequences.fasta --tf all -o Results/batch_scan/
+# window 500 bp, step 250 bp
+python scanning_tool.py -f realdata_CTCF_test.fasta --tf CTCF --frame 500 --step 250
 
-# other window size and step
-python scanning_tool.py -f sequences.fasta --tf CTCF --frame 500 --step 250
-
-# supported TFs and the models of one TF
-python scanning_tool.py --list_tfs
-python scanning_tool.py --list_models --tf CTCF
+# all 35 TFs (35 scans, each with its own null distribution)
+python scanning_tool.py -f realdata_CTCF_test.fasta --tf all -o Results/all_tfs
 ```
 
----
+With `--frame 300 --step 150`, `synthetic_CTCF_demo.fasta` gives 65 windows and `realdata_CTCF_test.fasta` gives 79.
+The test workflow checks the second number.
 
 ## Testing
-
-The test suite has 140 tests: 99 unit tests (`tests/test_scanning_tool.py`, no data needed) and 41 integration
-tests (`tests/test_integration.py`) that use `Models/`, the human and mouse PWM directories, the SARUS jar and
-the FASTA files of the repository; they need scikit-learn 1.3 to load the models.
 
 ```bash
 pytest                                # all tests
@@ -305,29 +267,29 @@ pytest tests/test_scanning_tool.py    # unit tests
 pytest tests/test_integration.py      # integration tests
 ```
 
-GitHub Actions runs the tests on Python 3.9 and 3.12 and a CTCF scan with null calibration on every push
-(`.github/workflows/tests.yml`).
-
----
+`tests/test_scanning_tool.py` has 84 unit tests, which build their own small input files. `tests/test_integration.py`
+has 41 integration tests, which use `Models/`, the four PWM folders, the two FASTA files and
+`sarus/releases/sarus-2.2.3.jar` (or `../sarus/releases/sarus-2.2.3.jar`); the tests that need the jar fail if it is
+missing. All tests need the packages of `requirements.txt`, and the integration tests also need Java. On every push,
+`.github/workflows/tests.yml` runs all tests on Python 3.10 and 3.12 and, on Python 3.12, a CTCF scan of
+`realdata_CTCF_test.fasta` with the null distribution.
 
 ## How it works
 
-1. **Input.** The FASTA sequences are read and upper-cased.
-2. **Windows.** Each sequence is cut into windows of `--frame` bp with a step of `--step` bp; a sequence shorter
-   than the frame is one window. Windows with IUPAC ambiguity codes (including N) are skipped.
-3. **PWM scores.** Every window is scanned with each PWM of the model by SPRY-SARUS
-   (`--skipn --show-non-matching --output-scoring-mode score besthit`), giving the best-hit log-odds score.
-4. **Features.** The scores form one column per PWM, in the order listed in the model's `.json`, and are
-   standardised with the training mean and standard deviation of each column.
-5. **Prediction.** The Random Forest gives the probability of a binding site for every window.
-6. **Null distribution** (unless `--no-null`). All input sequences are concatenated and shuffled `--n_null` times
-   with the dinucleotide counts preserved exactly (Altschul-Erickson; seed 42); the shuffled sequences are scanned
-   together in one run in the same way.
-7. **p-values.** Each window is compared with the pooled null probabilities.
-8. **FDR.** Benjamini-Hochberg q-values; windows with q-value <= `--fdr` are significant.
-9. **Export.** Full table, significant windows and BED file.
-
----
+1. **Input.** The FASTA sequences are read and converted to upper case.
+2. **Windows.** Each sequence is cut into windows of `--frame` bp with a step of `--step` bp. A sequence shorter than
+   `--frame` is one window. Windows that contain IUPAC ambiguity codes (B, D, H, K, M, N, R, S, V, W, Y) are skipped.
+3. **PWM scores.** SPRY-SARUS scans every window with each PWM of the model
+   (`--skipn --show-non-matching --output-scoring-mode score besthit`) and gives the log-odds score of the best hit.
+4. **Features.** The scores form one column per PWM, in the order of the model's `.json` file, and each column is
+   standardised with the training mean and standard deviation from the `.json` file.
+5. **Prediction.** The Random Forest gives the probability of a binding site for each window.
+6. **Null distribution** (skipped with `--no-null`). All input sequences are joined into one sequence, which is
+   shuffled `--n_null` times with its dinucleotide counts kept exactly (Altschul-Erickson algorithm, seed 42). The
+   shuffled copies are cut into windows and scored in the same way.
+7. **p-values.** Each window's probability is compared with the pooled probabilities of the null windows.
+8. **FDR.** p-values are converted to Benjamini-Hochberg q-values; windows with q-value <= `--fdr` are significant.
+9. **Export.** The full table, the significant windows and the BED file are written.
 
 ## Citation
 
@@ -335,10 +297,9 @@ Kravchenko P., Vorontsov I.E., Grosse I., Makeev V.J., Kulakovskiy I.V., and Pen
 learning on top of multiple position weight matrices improves genomic prediction of transcription factor binding
 sites.
 
-Models, PWMs and data: Zenodo [10.5281/zenodo.14927303](https://doi.org/10.5281/zenodo.14927303) (all versions); release v1.0.0: [10.5281/zenodo.23036475](https://doi.org/10.5281/zenodo.23036475).
+Zenodo: [10.5281/zenodo.14927303](https://doi.org/10.5281/zenodo.14927303) (all versions); release v1.0.0:
+[10.5281/zenodo.23036475](https://doi.org/10.5281/zenodo.23036475).
 
----
+## Licence
 
-## License
-
-MIT License (see the header of `scanning_tool.py`).
+MIT licence (see the header of `scanning_tool.py`).
