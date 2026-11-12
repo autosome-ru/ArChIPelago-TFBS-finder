@@ -267,7 +267,7 @@ pytest tests/test_scanning_tool.py    # unit tests
 pytest tests/test_integration.py      # integration tests
 ```
 
-`tests/test_scanning_tool.py` has 84 unit tests, which build their own small input files. `tests/test_integration.py`
+`tests/test_scanning_tool.py` has 99 unit tests, which build their own small input files. `tests/test_integration.py`
 has 41 integration tests, which use `Models/`, the four PWM folders, the two FASTA files and
 `sarus/releases/sarus-2.2.3.jar` (or `../sarus/releases/sarus-2.2.3.jar`); the tests that need the jar fail if it is
 missing. All tests need the packages of `requirements.txt`, and the integration tests also need Java. On every push,
